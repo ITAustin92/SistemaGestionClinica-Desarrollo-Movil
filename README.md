@@ -1,109 +1,186 @@
-# CMQ Salud
+# CMQ Salud — Gestión documental
 
-Base Android de Gestión Documental CMQ Salud para DSY1105, sección 004-D, profesor Bastian Lisperguer.
+Aplicación Android para demostrar el registro, consulta y revisión de documentos laborales y administrativos de funcionarios de CMQ Salud. Desarrollada con **Kotlin, Jetpack Compose y arquitectura MVVM** como proyecto académico de DSY1105.
 
-Integrantes: Ángel Quintero, Food Fontus y Máximo Lugo.
+| Información académica | Detalle |
+| --- | --- |
+| Integrantes | Ángel Quintero, Food Fontus y Máximo Lugo |
+| Sección | 004-D |
+| Docente | Bastian Lisperguer |
+| Versión | 0.1.0 — Base navegable de demostración |
 
-## Objetivo de esta versión
+## Objetivo y estado actual
 
-Proporcionar un proyecto ejecutable y navegable que represente las cinco vistas acordadas. La aplicación utiliza exclusivamente usuarios y documentos ficticios. La estética parte de los mockups de `Documentacion/05_Mockups`.
+El proyecto busca facilitar la organización y el seguimiento de antecedentes documentales mediante dos perfiles: funcionario y revisor. Esta versión implementa el flujo inicial con cinco pantallas conectadas, formularios con validación y cambios de estado visibles en la interfaz.
 
-Esta es la base de interfaz v0.1.0. No es todavía el MVP completo descrito en la documentación: los datos viven **en memoria** y se restablecen cuando termina el proceso. Cambiar de perfil dentro de la misma ejecución conserva los cambios de demostración.
+Todos los usuarios y documentos incluidos son ficticios. El acceso se realiza mediante selección de perfiles de demostración, sin credenciales institucionales.
 
-## Abrir en Android Studio
+**Los datos se mantienen en memoria:** los registros y las decisiones se conservan al cambiar de perfil durante la misma ejecución, pero se restablecen al finalizar el proceso de la aplicación. La persistencia local todavía no está implementada.
 
-1. Seleccionar **Open** y abrir esta carpeta raíz, donde está `settings.gradle.kts`. No abrir únicamente `app/`.
-2. Esperar a que termine la sincronización de Gradle. La primera vez necesita Internet para descargar dependencias.
-3. Usar el JDK integrado de Android Studio (JBR 25 en el equipo actual) o un JDK compatible con Gradle 9.3.1. En **Settings → Build, Execution, Deployment → Build Tools → Gradle**, seleccionar el Gradle JDK correspondiente.
-4. Instalar **Android SDK Platform 37.0** y **Build Tools 36.0.0** desde SDK Manager si faltan. Ya están instalados en el equipo de preparación.
-5. Seleccionar la configuración **app** y un teléfono/emulador Android API 26 o superior. En este equipo existe `Medium_Phone_API_37.0`.
-6. Presionar **Run**. La pantalla inicial es Acceso de demostración.
+## Funcionalidades disponibles
 
-`local.properties` contiene la ruta del SDK de este equipo y está excluido de Git. En otro equipo Android Studio debe generar su propia ruta. No cambiar el SDK de todos los integrantes a una ruta personal.
+- Selección de perfil de funcionario o revisor.
+- Listado de documentos con búsqueda por título y filtros por tipo y estado.
+- Registro de un documento con título, tipo, observación y adjunto simulado.
+- Validación del formulario y mensajes de error o confirmación.
+- Consulta del detalle, estado e historial de un documento.
+- Bandeja de documentos pendientes para el revisor.
+- Aprobación o rechazo de documentos; el rechazo requiere una observación.
+- Actualización de listados y detalles mediante estado observable.
+- Navegación entre pantallas y cierre de la sesión de demostración.
 
-## Recorrido disponible
-
-- Seleccionar **Funcionario Demo A** y entrar.
-- Consultar documentos, buscar por título y filtrar por tipo/estado.
-- Abrir detalle y regresar al listado.
-- Pulsar **Nuevo documento**, ingresar título y tipo; **Elegir archivo → Usar ejemplo** adjunta un PDF simulado.
-- Guardar permite comprobar campos obligatorios, estado de formulario, validación, respuesta visible y navegación al detalle. El registro se crea solo en memoria.
-- Salir y entrar como **Revisor Demo A** para revisar pendientes del Centro Demo A.
-- Abrir un pendiente; aprobar o rechazar. Rechazar exige observación. La decisión actualiza el estado y el historial de demostración.
-- Salir y regresar como funcionario para ver la decisión durante esa misma ejecución.
-
-También hay funcionarios ficticios B y C para comprobar que cada uno ve su expediente y que el revisor no consulta otro centro.
-
-## Qué está pendiente
-
-- Persistencia Room y recuperación después de terminar el proceso.
-- Selector de archivos reales, cámara y visor del adjunto. Sus botones explican que son acciones previstas; no solicitan permisos ni simulan una captura exitosa.
-- Autenticación institucional, SharePoint, correo y sincronización entre dispositivos, fuera del alcance local acordado.
-- Auditoría persistente y pruebas completas del MVP. El historial actual solo representa carga y decisión en memoria.
+El repositorio limita la consulta del funcionario a sus propios documentos y la del revisor a los documentos de otros titulares de su centro. Estas restricciones corresponden al prototipo académico y no constituyen autenticación ni autorización de un servicio institucional.
 
 ## Arquitectura MVVM
 
+La aplicación separa la presentación, el estado de la interfaz y el acceso a los datos:
+
 ```text
-app/src/main/java/cl/cmq/salud/
-├── MainActivity.kt              # Inicio de Compose y conexión de dependencias
-├── CmqApplication.kt            # Instancia compartida del repositorio demo
-├── ui/
-│   ├── CmqApp.kt                # NavHost, rutas y conexión de estado/callbacks
-│   ├── access/                  # P01 Acceso
-│   ├── documents/               # P02 Listado y filtros
-│   ├── documentform/            # P03 Formulario
-│   ├── documentdetail/          # P04 Detalle y revisión
-│   ├── review/                  # P05 Bandeja de pendientes
-│   ├── components/              # Botón, campo, selector, tarjeta y estado
-│   └── theme/                   # Paleta, tipografía y formas
-├── viewmodel/                   # CmqViewModel y estados de UI
-├── model/                       # Usuarios, documentos, estados y revisiones
-└── repository/                  # Contrato y fuente de datos en memoria
+Acción del usuario
+       ↓
+Interfaz Compose (ui)
+       ↓ evento
+CmqViewModel (viewmodel)
+       ↓ consulta u operación
+DocumentoRepository → DemoDocumentoRepository (repository)
+       ↓ datos y resultados mediante StateFlow
+CmqViewModel → nuevo estado → interfaz actualizada
 ```
 
-Las pantallas reciben datos y callbacks. El ViewModel controla sesión, filtros, validación y eventos. El repositorio comprueba el ámbito del usuario y las transiciones. `NavController` permanece en `ui/`. Un ViewModel compartido por el flujo es suficiente para esta base; las pantallas ya están separadas para poder dividir el estado cuando crezcan.
-
-## Versiones fijadas
-
-| Herramienta | Versión |
+| Capa | Responsabilidad |
 | --- | --- |
-| Android Gradle Plugin | 9.1.1 |
-| Gradle Wrapper | 9.3.1 |
-| Kotlin integrado en AGP y plugin Compose | 2.2.10 |
-| Compose BOM | 2025.10.00 |
-| Material | Material 3, administrado por BOM |
-| Activity Compose | 1.11.0 |
-| Lifecycle | 2.9.4 |
-| Navigation Compose | 2.9.5 |
-| SDK compilación / destino / mínimo | 37.0 / 36 / 26 |
-| Bytecode Java y Kotlin | 17 |
+| `ui/` | Presentar el estado, recibir acciones y enviarlas mediante callbacks. Incluye pantallas, componentes, tema y navegación. |
+| `viewmodel/` | Gestionar el perfil activo, filtros, estado del formulario, validaciones y procesamiento de eventos. Expone estado mediante `StateFlow`. |
+| `model/` | Definir usuarios, documentos, adjuntos de demostración, revisiones, eventos y estados. |
+| `repository/` | Centralizar el acceso a los datos y las restricciones de consulta y revisión. La implementación actual utiliza memoria. |
 
-AGP 9 incorpora Kotlin, por lo que no se aplica además `org.jetbrains.kotlin.android`. No aceptar actualizaciones automáticas de todas las dependencias al abrir el proyecto sin revisar compatibilidad.
+`MainActivity` inicia Compose y conecta el ViewModel con la interfaz. `CmqApplication` proporciona una instancia compartida del repositorio. `CmqApp` contiene el `NavHost` y mantiene el `NavController` dentro de la capa de interfaz.
 
-## Comandos de verificación
+La base utiliza un ViewModel compartido por el flujo. El contrato `DocumentoRepository` separa las pantallas de la implementación de almacenamiento y permite incorporar posteriormente una fuente persistente.
 
-Desde PowerShell en la raíz, configurar `JAVA_HOME` hacia el JDK elegido y ejecutar:
+### Estructura del código
+
+```text
+app/src/main/java/cl/cmq/salud/
+├── MainActivity.kt
+├── CmqApplication.kt
+├── ui/
+│   ├── CmqApp.kt
+│   ├── access/             # Acceso de demostración
+│   ├── documents/          # Listado, búsqueda y filtros
+│   ├── documentform/       # Registro de documentos
+│   ├── documentdetail/     # Detalle, historial y revisión
+│   ├── review/             # Bandeja de pendientes
+│   ├── components/         # Componentes reutilizables
+│   └── theme/              # Estilo visual
+├── viewmodel/
+├── model/
+└── repository/
+```
+
+## Requisitos para ejecutar el proyecto
+
+- Android Studio compatible con Android Gradle Plugin 9.1.1.
+- JDK 25 para el daemon de Gradle, según `gradle/gradle-daemon-jvm.properties`. La compilación de referencia utilizó JBR 25 de Android Studio.
+- Android SDK Platform **37.0** y Android SDK Build Tools **36.0.0**.
+- Emulador o dispositivo físico con **Android 8.0 / API 26 o superior**.
+- Conexión a Internet durante la primera sincronización para descargar las herramientas y dependencias necesarias.
+
+El repositorio incluye Gradle Wrapper; no requiere instalar Gradle por separado. El bytecode de la aplicación se configura para Java/Kotlin 17, independientemente del JDK usado por el daemon.
+
+## Instalación y ejecución en Android Studio
+
+1. Clonar el repositorio. La base inicial está disponible en la rama `dev-angel`; seleccionar esa rama para probar esta entrega.
+2. Abrir en Android Studio la carpeta raíz que contiene `settings.gradle.kts` y `gradlew`, en lugar de abrir solamente `app/`.
+3. Instalar los componentes del SDK indicados desde **SDK Manager** y esperar a que termine la sincronización de Gradle.
+4. Revisar la configuración de Gradle JDK si la sincronización informa un problema con Java. El proyecto establece Java 25 como criterio del daemon.
+5. Crear un dispositivo virtual desde **Device Manager**, o conectar un teléfono con depuración USB habilitada y autorizar la conexión.
+6. Seleccionar el módulo **app**, elegir el dispositivo y ejecutar **Run**.
+
+La pantalla inicial permite seleccionar un perfil de demostración. No se necesita una cuenta externa ni configurar un servidor.
+
+Android Studio genera `local.properties` con la ruta del SDK de cada equipo. Ese archivo está excluido del repositorio y no debe copiarse desde otro entorno.
+
+## Recorrido de demostración
+
+1. Ingresar como **Funcionario Demo A** y consultar el listado inicial.
+2. Probar la búsqueda, los filtros y la navegación hacia el detalle de un documento.
+3. Abrir **Nuevo documento**, ingresar un título y seleccionar un tipo.
+4. Utilizar **Elegir archivo → Usar ejemplo** para adjuntar el PDF simulado y guardar. El formulario muestra errores si faltan datos obligatorios o el título no cumple la longitud permitida.
+5. Consultar el detalle del registro creado, inicialmente pendiente de revisión.
+6. Salir y seleccionar **Revisor Demo A**, sin finalizar el proceso de la aplicación.
+7. Abrir la bandeja de pendientes, seleccionar el documento y aprobarlo o rechazarlo. Para rechazar, ingresar una observación.
+8. Volver al perfil del funcionario y comprobar el cambio de estado y el historial.
+
+Los perfiles **Funcionario Demo B** y **Funcionario Demo C** permiten comprobar la separación de expedientes y centros. El funcionario C pertenece a un centro distinto del revisor A.
+
+## Compilación y pruebas
+
+Desde una terminal en la raíz del proyecto, con Java y el SDK configurados:
+
+**Windows / PowerShell**
 
 ```powershell
 .\gradlew.bat :app:assembleDebug
 .\gradlew.bat :app:testDebugUnitTest
+.\gradlew.bat :app:lintDebug
 ```
 
-APK de depuración: `app/build/outputs/apk/debug/app-debug.apk`.
+**macOS / Linux**
 
-La carpeta `.gradle-user-home/` es una caché local utilizada durante la preparación y no se versiona. Android Studio puede usar su caché normal. No subir `local.properties`, cachés, APK ni archivos del IDE al repositorio.
+```bash
+bash ./gradlew :app:assembleDebug
+bash ./gradlew :app:testDebugUnitTest
+bash ./gradlew :app:lintDebug
+```
 
-En Windows, mantener la **caché de Gradle en una ruta sin tildes**, por ejemplo `C:\Users\austi\.gradle` (valor estándar). `android.overridePathCheck=true` permite conservar el proyecto en la carpeta solicitada. El script `gradle/windows-test-paths.gradle` copia automáticamente las clases temporales de pruebas a esa caché cuando la ruta del proyecto contiene tildes, para evitar el fallo de carga de clases del ejecutor de Gradle. No cambia las rutas del código ni del APK. No habilitar configuration cache sin revisar primero este ajuste.
+El APK de depuración se genera en `app/build/outputs/apk/debug/app-debug.apk`.
 
-## Emulador en este equipo
+Las pruebas unitarias del repositorio verifican el aislamiento entre funcionarios, la restricción por centro, el rechazo con observación obligatoria, la protección de decisiones ya registradas y la visibilidad de nuevos documentos según el perfil.
 
-Durante la comprobación, el AVD existente informó que falta el controlador de aceleración de Android; el intento de arranque por software también terminó sin crear un dispositivo disponible. Esto debe resolverse antes de ejecutar ese AVD desde Android Studio, o se puede usar un teléfono Android con depuración USB autorizada. No se cambió la virtualización de Windows ni la BIOS. Consultar la [configuración oficial de aceleración del emulador](https://developer.android.com/studio/run/emulator-acceleration#vm-windows).
+### Verificación registrada para la base inicial
 
-## Referencias técnicas
+| Comprobación | Resultado registrado |
+| --- | --- |
+| Compilación de depuración | Correcta; APK generado |
+| Pruebas unitarias | 5 pruebas, sin fallos ni errores |
+| Android Lint | Sin errores; 12 avisos |
+| Ejecución y recorrido manual en dispositivo | Pendiente de verificación |
 
-- [Compatibilidad de AGP 9.1.1](https://developer.android.com/build/releases/agp-9-1-0-release-notes)
-- [Kotlin integrado en AGP](https://developer.android.com/build/migrate-to-built-in-kotlin)
-- [Catálogo de versiones del ejemplo oficial Android](https://github.com/android/car-codelabs/blob/main/build-a-parked-app/end/gradle/libs.versions.toml)
-- [Arquitectura Android](https://developer.android.com/topic/architecture)
+La verificación inicial se realizó en Windows con JBR 25 y Gradle 9.3.1. La validación visual y del flujo completo requiere ejecutar la aplicación en un dispositivo o emulador disponible.
 
-El estado de las verificaciones realizadas se registra en `VERIFICACION_BASE.md`.
+## Alcance pendiente
+
+| Funcionalidad | Situación |
+| --- | --- |
+| Persistencia con Room | Prevista para el MVP local; todavía no implementada. |
+| Cámara, selección y visualización de archivos reales | Pendientes. Los adjuntos actuales son ejemplos simulados. |
+| Historial persistente | Pendiente; el historial actual se mantiene en memoria. |
+| Autenticación institucional | Fuera de esta versión. |
+| SharePoint, correo y sincronización entre dispositivos | Fuera de esta versión. |
+
+Los botones relacionados con archivos reales o cámara informan su estado de implementación. La base no realiza capturas, transferencias ni almacenamiento de documentos reales.
+
+## Consideraciones del entorno
+
+- **Emulador:** requiere una configuración de virtualización y aceleración compatible con el equipo. Como alternativa, puede utilizarse un teléfono Android con depuración USB.
+- **Rutas con tildes en Windows:** el proyecto incluye `android.overridePathCheck=true` y un ajuste en `gradle/windows-test-paths.gradle` para ejecutar las pruebas cuando la ruta contiene caracteres no ASCII. La caché de Gradle debe estar en una ruta sin tildes. El ajuste no se ha validado con configuration cache.
+- **Archivos locales:** las cachés, compilaciones, configuración personal del SDK y documentación de trabajo están excluidas mediante `.gitignore`.
+
+## Tecnologías y versiones
+
+| Tecnología | Versión o configuración |
+| --- | --- |
+| Android Gradle Plugin | 9.1.1 |
+| Gradle Wrapper | 9.3.1 |
+| Kotlin y plugin Compose | 2.2.10; Kotlin integrado en AGP |
+| Jetpack Compose BOM | 2025.10.00 |
+| Material Design | Material 3 |
+| Activity Compose | 1.11.0 |
+| Lifecycle / ViewModel | 2.9.4 |
+| Navigation Compose | 2.9.5 |
+| Kotlin Coroutines | 1.10.2 |
+| Pruebas | JUnit 4.13.2 |
+| SDK de compilación / destino / mínimo | 37.0 / 36 / 26 |
+
+Las versiones se centralizan en `gradle/libs.versions.toml`. La configuración utiliza Kotlin integrado en AGP, por lo que no aplica adicionalmente el plugin `org.jetbrains.kotlin.android`.
