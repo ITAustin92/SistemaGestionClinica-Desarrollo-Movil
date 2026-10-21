@@ -1,0 +1,29 @@
+[versions]
+agp = "9.1.1"
+kotlin = "2.2.10"
+composeBom = "2025.10.00"
+core = "1.17.0"
+activity = "1.11.0"
+lifecycle = "2.9.4"
+navigation = "2.9.5"
+coroutines = "1.10.2"
+junit = "4.13.2"
+
+[libraries]
+androidx-core = { module = "androidx.core:core-ktx", version.ref = "core" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
+androidx-lifecycle-runtime = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
+androidx-lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+androidx-navigation = { module = "androidx.navigation:navigation-compose", version.ref = "navigation" }
+androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { module = "androidx.compose.ui:ui" }
+androidx-compose-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+androidx-compose-tooling = { module = "androidx.compose.ui:ui-tooling" }
+androidx-compose-material = { module = "androidx.compose.material3:material3" }
+androidx-compose-icons = { module = "androidx.compose.material:material-icons-extended" }
+coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+junit = { module = "junit:junit", version.ref = "junit" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
