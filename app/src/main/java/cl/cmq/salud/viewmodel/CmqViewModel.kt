@@ -8,6 +8,7 @@ import cl.cmq.salud.repository.ArchivoAdjuntoStore
 import cl.cmq.salud.repository.DocumentoRepository
 import android.net.Uri
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -32,10 +33,18 @@ data class CmqUiState(
     val observacionRevision: String = "", val errorRevision: String? = null,
     val mensaje: String? = null, val cargando: Boolean = true, val ocupado: Boolean = false,
     val errorCarga: String? = null,
+    val autenticando: Boolean = false, val errorAcceso: String? = null,
+    val puedeConfigurarBiometria: Boolean = false,
+    val bandejaRevision: EstadoDocumento = EstadoDocumento.PENDIENTE,
 )
 
-class CmqViewModel(private val repository: DocumentoRepository, private val archivos: ArchivoAdjuntoStore) : ViewModel() {
+class CmqViewModel(private val repository: DocumentoRepository, private val archivos: ArchivoAdjuntoStore,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO) : ViewModel() {
     private val datos = MutableStateFlow(CmqUiState())
+    private var siguienteSolicitud = 0L
+    var solicitudBiometricaPendiente: Long? = null
+        private set
+    private var usuarioBiometricoId: Long? = null
     val usuarios = repository.usuarios
     val uiState = combine(datos, repository.documentos) { estado, documentos -> estado.copy(registros = documentos) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, datos.value)
@@ -47,7 +56,7 @@ class CmqViewModel(private val repository: DocumentoRepository, private val arch
         datos.update { it.copy(cargando = true, errorCarga = null) }
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) { repository.cargar() }
+                withContext(ioDispatcher) { repository.cargar() }
                 datos.update { it.copy(cargando = false) }
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
@@ -56,14 +65,74 @@ class CmqViewModel(private val repository: DocumentoRepository, private val arch
         }
     }
 
-    fun seleccionarUsuario(id: Long) { datos.update { it.copy(usuarioSeleccionadoId = id) } }
+    fun seleccionarUsuario(id: Long) {
+        solicitudBiometricaPendiente = null
+        usuarioBiometricoId = null
+        datos.update { it.copy(usuarioSeleccionadoId = id, autenticando = false, errorAcceso = null, puedeConfigurarBiometria = false) }
+    }
     fun entrar(): Usuario? {
         if (datos.value.cargando || datos.value.errorCarga != null) return null
         val usuario = usuarios.find { it.id == datos.value.usuarioSeleccionadoId } ?: return null
+        if (usuario.rol == Rol.REVISOR) {
+            errorAcceso("Verifica tu identidad con la biometría del dispositivo para acceder al revisor.")
+            return null
+        }
+        return abrirSesion(usuario)
+    }
+
+    fun entrarRevisorPorPulsacion(): Usuario? {
+        val estado = datos.value
+        if (estado.cargando || estado.ocupado || estado.errorCarga != null || estado.usuario != null || estado.autenticando) return null
+        val usuario = usuarios.find { it.id == estado.usuarioSeleccionadoId } ?: return null
+        if (usuario.rol != Rol.REVISOR) return null
+        return abrirSesion(usuario)
+    }
+
+    private fun abrirSesion(usuario: Usuario): Usuario {
+        solicitudBiometricaPendiente = null
+        usuarioBiometricoId = null
         datos.value = CmqUiState(usuario = usuario, usuarioSeleccionadoId = usuario.id, cargando = false)
         return usuario
     }
+
+    /** Cada resultado se vincula al perfil y a un intento concreto; no se guarda en SQLite. */
+    fun iniciarAutenticacionRevisor(): Long? {
+        val estado = datos.value
+        if (estado.cargando || estado.ocupado || estado.errorCarga != null || estado.usuario != null || estado.autenticando) return null
+        val seleccionado = usuarios.find { it.id == estado.usuarioSeleccionadoId } ?: return null
+        if (seleccionado.rol != Rol.REVISOR) return null
+        val solicitud = ++siguienteSolicitud
+        solicitudBiometricaPendiente = solicitud
+        usuarioBiometricoId = seleccionado.id
+        datos.update { it.copy(autenticando = true, errorAcceso = null, puedeConfigurarBiometria = false) }
+        return solicitud
+    }
+
+    fun confirmarAutenticacionRevisor(solicitud: Long): Usuario? {
+        if (solicitud != solicitudBiometricaPendiente || !datos.value.autenticando) return null
+        val usuario = usuarios.find { it.id == usuarioBiometricoId && it.id == datos.value.usuarioSeleccionadoId } ?: return null
+        if (usuario.rol != Rol.REVISOR) return null
+        return abrirSesion(usuario)
+    }
+
+    fun falloIntentoBiometrico(solicitud: Long) {
+        if (solicitud == solicitudBiometricaPendiente) {
+            datos.update { it.copy(errorAcceso = "Biometría no reconocida. Vuelve a intentarlo en el diálogo de Android.") }
+        }
+    }
+
+    fun cancelarAutenticacionRevisor(solicitud: Long, mensaje: String) {
+        if (solicitud == solicitudBiometricaPendiente) errorAcceso(mensaje)
+    }
+
+    fun errorAcceso(mensaje: String, configurar: Boolean = false) {
+        solicitudBiometricaPendiente = null
+        usuarioBiometricoId = null
+        datos.update { it.copy(autenticando = false, errorAcceso = mensaje, puedeConfigurarBiometria = configurar) }
+    }
     fun salir() {
+        solicitudBiometricaPendiente = null
+        usuarioBiometricoId = null
         descartarFormulario()
         datos.value = CmqUiState(cargando = false)
     }
@@ -71,11 +140,15 @@ class CmqViewModel(private val repository: DocumentoRepository, private val arch
     fun filtrarTipo(tipo: TipoDocumento?) { datos.update { it.copy(filtroTipo = tipo) } }
     fun filtrarEstado(estado: EstadoDocumento?) { datos.update { it.copy(filtroEstado = estado) } }
     fun limpiarFiltros() { datos.update { it.copy(busqueda = "", filtroTipo = null, filtroEstado = null) } }
+    fun seleccionarBandejaRevision(estado: EstadoDocumento) {
+        datos.update { it.copy(bandejaRevision = estado) }
+    }
     fun visibles(): List<Documento> {
         val state = datos.value
         val usuario = state.usuario ?: return emptyList()
         return repository.documentosVisibles(usuario).filter { doc ->
-            (usuario.rol != Rol.REVISOR || doc.estado == EstadoDocumento.PENDIENTE) &&
+            (usuario.rol != Rol.REVISOR || (doc.estado == state.bandejaRevision &&
+                (state.bandejaRevision == EstadoDocumento.PENDIENTE || doc.revision?.revisor == usuario.nombre))) &&
                 doc.titulo.contains(state.busqueda.trim(), ignoreCase = true) &&
                 (state.filtroTipo == null || doc.tipo == state.filtroTipo) &&
                 (state.filtroEstado == null || doc.estado == state.filtroEstado)
@@ -86,7 +159,7 @@ class CmqViewModel(private val repository: DocumentoRepository, private val arch
     fun descartarFormulario() {
         val ruta = datos.value.formulario.adjunto?.rutaLocal
         datos.update { it.copy(formulario = FormularioUiState()) }
-        viewModelScope.launch(Dispatchers.IO) { archivos.descartar(ruta) }
+        viewModelScope.launch(ioDispatcher) { archivos.descartar(ruta) }
     }
     private fun formulario(cambio: (FormularioUiState) -> FormularioUiState) {
         datos.update { it.copy(formulario = cambio(it.formulario)) }
@@ -98,7 +171,7 @@ class CmqViewModel(private val repository: DocumentoRepository, private val arch
     private fun adjuntar(adjunto: Adjunto) {
         val anterior = datos.value.formulario.adjunto?.rutaLocal
         formulario { it.copy(adjunto = adjunto, errores = it.errores - "adjunto") }
-        viewModelScope.launch(Dispatchers.IO) { archivos.descartar(anterior) }
+        viewModelScope.launch(ioDispatcher) { archivos.descartar(anterior) }
     }
     fun adjuntarDemo() { adjuntar(Adjunto("documento_de_ejemplo.pdf", "PDF", "Se genera al guardar")) }
     fun importar(uri: Uri) {
@@ -119,7 +192,7 @@ class CmqViewModel(private val repository: DocumentoRepository, private val arch
         }, ::adjuntar)
     }
     fun cancelarCaptura(ruta: String) {
-        viewModelScope.launch(Dispatchers.IO) { archivos.descartar(ruta) }
+        viewModelScope.launch(ioDispatcher) { archivos.descartar(ruta) }
     }
     fun guardar(onGuardado: (Long) -> Unit) {
         val usuario = datos.value.usuario ?: return
@@ -154,6 +227,8 @@ class CmqViewModel(private val repository: DocumentoRepository, private val arch
     }
     fun reiniciar() {
         tarea({ repository.reiniciar() }) {
+            solicitudBiometricaPendiente = null
+            usuarioBiometricoId = null
             datos.value = CmqUiState(cargando = false, mensaje = "Demostración reiniciada. Se restauraron los documentos de ejemplo.")
         }
     }
@@ -164,7 +239,7 @@ class CmqViewModel(private val repository: DocumentoRepository, private val arch
         datos.update { it.copy(ocupado = true) }
         viewModelScope.launch {
             try {
-                val resultado = withContext(Dispatchers.IO) { accion() }
+                val resultado = withContext(ioDispatcher) { accion() }
                 datos.update { it.copy(ocupado = false) }
                 exito(resultado)
             } catch (error: Exception) {

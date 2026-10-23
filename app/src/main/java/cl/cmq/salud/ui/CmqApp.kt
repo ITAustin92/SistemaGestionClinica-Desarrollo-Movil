@@ -39,7 +39,7 @@ private object Rutas {
 }
 
 @Composable
-fun CmqApp(viewModel: CmqViewModel) {
+fun CmqApp(viewModel: CmqViewModel, onAutenticarRevisor: () -> Unit, onConfigurarBiometria: () -> Unit) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val nav = rememberNavController()
@@ -73,6 +73,10 @@ fun CmqApp(viewModel: CmqViewModel) {
         if (state.usuario == null && nav.currentDestination?.route != Rutas.ACCESO) {
             vistaPrevia = null
             nav.navigate(Rutas.ACCESO) { popUpTo(nav.graph.id) { inclusive = true }; launchSingleTop = true }
+        } else if (state.usuario != null && nav.currentDestination?.route == Rutas.ACCESO) {
+            nav.navigate(if (state.usuario?.rol == Rol.REVISOR) Rutas.PENDIENTES else Rutas.DOCUMENTOS) {
+                popUpTo(Rutas.ACCESO) { inclusive = true }; launchSingleTop = true
+            }
         }
     }
     val acciones = state.usuario?.let { usuario ->
@@ -86,12 +90,11 @@ fun CmqApp(viewModel: CmqViewModel) {
                 composable(Rutas.ACCESO) {
                     AccesoScreen(viewModel.usuarios, viewModel.usuarios.find { it.id == state.usuarioSeleccionadoId },
                         viewModel::seleccionarUsuario, onEntrar = {
-                            viewModel.entrar()?.let { usuario ->
-                                nav.navigate(if (usuario.rol == Rol.REVISOR) Rutas.PENDIENTES else Rutas.DOCUMENTOS) {
-                                    popUpTo(Rutas.ACCESO) { inclusive = true }; launchSingleTop = true
-                                }
-                            }
-                        })
+                            if (viewModel.usuarios.find { it.id == state.usuarioSeleccionadoId }?.rol == Rol.REVISOR) onAutenticarRevisor()
+                            else viewModel.entrar()
+                        }, autenticando = state.autenticando, errorAcceso = state.errorAcceso,
+                        puedeConfigurarBiometria = state.puedeConfigurarBiometria, onConfigurarBiometria = onConfigurarBiometria,
+                        onMantenerUsuario = { viewModel.entrarRevisorPorPulsacion() })
                 }
                 composable(Rutas.DOCUMENTOS) {
                     state.usuario?.let { usuario ->
@@ -101,7 +104,8 @@ fun CmqApp(viewModel: CmqViewModel) {
                     }
                 }
                 composable(Rutas.PENDIENTES) {
-                    state.usuario?.let { PendientesScreen(it, viewModel.visibles(), onAbrir = abrir, onSalir = salir) }
+                    state.usuario?.let { PendientesScreen(it, viewModel.visibles(), state.bandejaRevision,
+                        viewModel::seleccionarBandejaRevision, onAbrir = abrir, onSalir = salir) }
                 }
                 composable(Rutas.PERFIL) {
                     state.usuario?.let { usuario ->

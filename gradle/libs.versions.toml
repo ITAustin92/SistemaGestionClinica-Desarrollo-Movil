@@ -10,6 +10,8 @@ coroutines = "1.10.2"
 junit = "4.13.2"
 robolectric = "4.17"
 exif = "1.4.2"
+biometric = "1.1.0"
+fragment = "1.8.9"
 
 [libraries]
 androidx-core = { module = "androidx.core:core-ktx", version.ref = "core" }
@@ -23,10 +25,15 @@ androidx-compose-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 androidx-compose-tooling = { module = "androidx.compose.ui:ui-tooling" }
 androidx-compose-material = { module = "androidx.compose.material3:material3" }
 androidx-compose-icons = { module = "androidx.compose.material:material-icons-extended" }
+androidx-compose-test = { module = "androidx.compose.ui:ui-test-junit4" }
+androidx-compose-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 junit = { module = "junit:junit", version.ref = "junit" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 androidx-exif = { module = "androidx.exifinterface:exifinterface", version.ref = "exif" }
+androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
+androidx-fragment = { module = "androidx.fragment:fragment", version.ref = "fragment" }
+coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

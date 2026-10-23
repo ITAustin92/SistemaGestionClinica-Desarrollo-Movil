@@ -7,13 +7,13 @@ Aplicación Android para registrar, consultar y revisar documentos laborales y a
 | Integrantes | Ángel Quintero, Food Fontus y Máximo Lugo |
 | Sección | 004-D |
 | Docente | Bastian Lisperguer |
-| Versión | 0.2.1 — Perfiles personalizados y documentos de ejemplo |
+| Versión | 0.3.0 — Acceso biométrico del revisor |
 
 ## Objetivo y estado actual
 
 El proyecto busca facilitar la organización y el seguimiento de antecedentes documentales mediante dos perfiles: funcionario y revisor. Incluye seis pantallas conectadas: acceso, listado, registro, detalle, pendientes y perfil.
 
-Los usuarios y los documentos iniciales son ficticios. El acceso permite seleccionar perfiles de demostración sin credenciales institucionales. Los documentos añadidos, los adjuntos y las revisiones **permanecen al cerrar y volver a abrir la aplicación**. Al iniciar un nuevo proceso se vuelve a seleccionar el perfil; los datos se recuperan desde SQLite.
+Los usuarios y los documentos iniciales son ficticios. El acceso permite seleccionar perfiles de demostración sin credenciales institucionales. El botón «Verificar identidad y entrar» utiliza la autenticación biométrica del dispositivo. Los documentos añadidos, los adjuntos y las revisiones **permanecen al cerrar y volver a abrir la aplicación**. Al iniciar un nuevo proceso se vuelve a seleccionar el perfil; los datos se recuperan desde SQLite.
 
 ## Funcionalidades disponibles
 
@@ -27,6 +27,8 @@ Los usuarios y los documentos iniciales son ficticios. El acceso permite selecci
 - Validación del formulario y mensajes de error o confirmación.
 - Consulta del detalle, estado e historial de un documento.
 - Aprobación o rechazo por el revisor; el rechazo requiere una observación.
+- Bandejas **Pendientes**, **Aprobados** y **Rechazados** para consultar las decisiones propias y abrir el detalle con sus observaciones.
+- Acceso del revisor protegido con el diálogo biométrico de Android.
 - Menú del avatar con acceso a **Mi perfil** y cierre de sesión.
 - Reinicio de la demostración con confirmación desde la pantalla de perfil.
 
@@ -59,7 +61,7 @@ Nuevo estado → interfaz actualizada
 | `model/` | Definir usuarios, documentos, adjuntos, revisiones, eventos y estados. |
 | `repository/` | Aplicar restricciones, acceder a SQLite y gestionar los archivos temporales y definitivos. |
 
-`MainActivity` inicia Compose. `CmqApplication` proporciona las instancias compartidas del repositorio y del almacén de adjuntos. `CmqApp` contiene el `NavHost`, los contratos de Activity Result y los callbacks de navegación. El ViewModel no conoce el `NavController`.
+`MainActivity`, basada en `FragmentActivity`, inicia Compose y conecta AndroidX Biometric con el ViewModel. `CmqApplication` proporciona las instancias compartidas del repositorio y del almacén de adjuntos. `CmqApp` contiene el `NavHost`, los contratos de Activity Result y los callbacks de navegación. El ViewModel no conoce el `NavController`.
 
 El repositorio SQLite reutiliza las reglas de `DemoDocumentoRepository`, cuya implementación en memoria también permite probarlas por separado. Cada operación guarda primero los cambios en una transacción y publica después el nuevo estado. La implementación actual reescribe el conjunto de documentos dentro de la transacción, una solución acotada para el volumen del prototipo.
 
@@ -113,6 +115,7 @@ La cámara se abre con `ActivityResultContracts.TakePicture`. Un `FileProvider` 
 - Android SDK Platform **37.0** y Build Tools **36.0.0**.
 - Emulador o dispositivo físico con **Android 8.0 / API 26 o superior**.
 - Aplicación de cámara disponible para capturar imágenes; para probar en emulador, una cámara virtual configurada.
+- Sensor biométrico compatible y una huella o biometría fuerte registrada para utilizar la verificación biométrica del revisor. Los funcionarios no requieren biometría.
 - Conexión a Internet durante la primera sincronización y primera descarga de las dependencias de prueba.
 
 El proyecto incluye Gradle Wrapper. El bytecode de la aplicación se configura para Java/Kotlin 17, independientemente del JDK del daemon.
@@ -136,9 +139,10 @@ Android Studio genera `local.properties` con la ruta del SDK de cada equipo. Ese
 4. Comprobar la vista previa y guardar el documento. Si la captura se cancela, se conserva el adjunto anterior.
 5. Abrir el adjunto desde el detalle para comprobar la imagen guardada.
 6. Cerrar la aplicación, finalizar su proceso y volver a abrirla. Seleccionar el mismo funcionario y verificar que el documento y su imagen siguen disponibles.
-7. Cerrar sesión desde el avatar e ingresar como **Dr. Pedro Soto**.
+7. Cerrar sesión desde el avatar, seleccionar **Dr. Pedro Soto**, pulsar **Verificar identidad y entrar** y completar el diálogo biométrico de Android.
 8. Abrir el documento pendiente y aprobarlo o rechazarlo, indicando una observación para el rechazo.
-9. Volver a cerrar y abrir la app; comprobar el estado y el historial con el perfil del funcionario.
+9. Volver a la bandeja del doctor y seleccionar **Aprobados** o **Rechazados** para consultar sus decisiones. Abrir un documento para ver su detalle, archivo e historial.
+10. Volver a cerrar y abrir la app; comprobar el estado y el historial con el perfil del funcionario.
 
 También puede probarse **Elegir archivo** con un PDF, JPG o PNG. La captura actual digitaliza una página como imagen: no incluye OCR, recorte automático ni generación de PDF multipágina.
 
@@ -147,6 +151,41 @@ También puede probarse **Elegir archivo** con un PDF, JPG o PNG. La captura act
 Desde cualquier perfil, abrir **avatar → Mi perfil → Reiniciar datos locales** y confirmar.
 
 El reinicio afecta a **todos los perfiles del dispositivo**: elimina los documentos añadidos, los adjuntos privados, las decisiones registradas y el formulario activo. Restaura los cinco documentos de ejemplo con sus estados originales y vuelve a la pantalla de acceso. Si se cancela la confirmación, no se modifica nada. No elimina archivos originales seleccionados desde otras ubicaciones del dispositivo.
+
+Las bandejas de decisiones muestran únicamente los documentos del centro revisados por el perfil activo. Los documentos pendientes se retiran de esa pestaña al registrar una decisión, pero permanecen disponibles en **Aprobados** o **Rechazados**. Estas decisiones se recuperan desde SQLite al volver a abrir la app.
+
+## Acceso biométrico del revisor
+
+Al seleccionar **Dr. Pedro Soto**, el acceso utiliza `BiometricPrompt` de AndroidX con `BIOMETRIC_STRONG` (clase 3). En un teléfono con lector de huellas se muestra la verificación del sistema; Android también puede admitir otras modalidades fuertes compatibles, como reconocimiento facial de clase 3. La API no permite seleccionar exclusivamente una modalidad biométrica.
+
+- El botón **Verificar identidad y entrar** abre la sesión tras un resultado biométrico correcto.
+- Un intento no reconocido permite reintentar dentro del diálogo; cancelar, un error o el bloqueo del sensor mantienen el acceso cerrado.
+- El diálogo biométrico no habilita PIN ni contraseña como métodos alternativos.
+- Si no hay biometría registrada, la pantalla ofrece **Configurar biometría** para abrir los ajustes de Android. Sin sensor compatible, la verificación biométrica no está disponible; los funcionarios siguen disponibles.
+- Cerrar sesión o iniciar un nuevo proceso finaliza la sesión activa. Una rotación de pantalla conserva el intento activo mediante el ViewModel y la conexión de callbacks de AndroidX.
+
+La validación corresponde a **alguna biometría registrada en el dispositivo**, no identifica por sí misma al Dr. Pedro Soto. Los perfiles siguen siendo académicos. La app no recibe ni guarda imágenes, plantillas o identificadores de huellas. Este control protege la entrada local al perfil; no reemplaza una identidad institucional ni cifra la base SQLite.
+
+### Demostración en un teléfono
+
+1. Configurar un bloqueo de pantalla y registrar una huella compatible en los ajustes de seguridad del teléfono.
+2. Ejecutar la app y seleccionar **Dr. Pedro Soto**.
+3. Pulsar **Verificar identidad y entrar** y presentar la huella cuando Android lo solicite.
+4. Cerrar sesión y repetir, esta vez cancelando: la bandeja del revisor debe permanecer inaccesible.
+
+### Demostración en el emulador
+
+1. Utilizar un AVD con lector de huellas virtual y registrar una huella desde los ajustes de seguridad de Android.
+2. Durante el registro, simular las lecturas desde **Extended controls → Fingerprint → Touch Sensor**. Si esos controles no aparecen en la vista integrada, ejecutar el emulador en una ventana independiente.
+3. Volver a la app, seleccionar al revisor y activar el mismo dedo virtual cuando aparezca el diálogo.
+
+También puede enviarse una lectura desde una terminal con `adb` configurado:
+
+```bash
+adb -e emu finger touch 1
+```
+
+El identificador debe corresponder a una huella previamente registrada en ese AVD. El comando simula el sensor del emulador y no constituye una ruta alternativa dentro de la aplicación.
 
 ## Compilación y pruebas
 
@@ -170,15 +209,15 @@ bash ./gradlew :app:lintDebug
 
 APK de depuración: `app/build/outputs/apk/debug/app-debug.apk`.
 
-Las pruebas incluyen reglas de acceso y revisión, reapertura de SQLite, recuperación de adjuntos e historial, reinicio de la demostración, fallo de escritura, captura JPEG y validación de archivos. Las pruebas de integración local utilizan Robolectric; la toma real de fotografías y el recorrido visual deben verificarse en un teléfono o emulador.
+Las pruebas incluyen reglas de acceso y revisión, reapertura de SQLite, recuperación de adjuntos e historial, reinicio de la demostración, fallo de escritura, captura JPEG y validación de archivos. Se añaden pruebas del acceso biométrico: rechazo del acceso directo al revisor, intentos fallidos, cancelaciones, resultados tardíos, cambio de perfil, cierre de sesión y sensor simulado en Android 8 con o sin huellas registradas. Las pruebas de integración local utilizan Robolectric; la toma real de fotografías y el recorrido visual deben verificarse en un teléfono o emulador.
 
-Verificación de la versión 0.2.1 realizada el 23 de octubre de 2026 en Windows con JBR 25:
+Verificación de la versión 0.3.0 realizada el 23 de octubre de 2026 en Windows con JBR 25:
 
 | Comprobación | Resultado |
 | --- | --- |
 | `assembleDebug` | Correcto; APK generado. |
-| `testDebugUnitTest` | 18 pruebas, sin fallos ni errores. |
-| `lintDebug` | Sin errores; 14 advertencias. |
+| `testDebugUnitTest` | 40 pruebas, sin fallos ni errores. |
+| `lintDebug` | Sin errores; 16 advertencias. |
 | Captura real y recorrido visual | Pendientes de prueba en un dispositivo. |
 
 ## Limitaciones y siguientes etapas
@@ -209,6 +248,8 @@ Verificación de la versión 0.2.1 realizada el 23 de octubre de 2026 en Windows
 | Navigation Compose | 2.9.5 |
 | Kotlin Coroutines | 1.10.2 |
 | AndroidX ExifInterface | 1.4.2 |
+| AndroidX Biometric | 1.1.0 |
+| AndroidX Fragment | 1.8.9 |
 | Base local | SQLite mediante SQLiteOpenHelper |
 | Pruebas | JUnit 4.13.2 y Robolectric 4.17 |
 | SDK de compilación / destino / mínimo | 37.0 / 36 / 26 |
@@ -220,3 +261,6 @@ Las dependencias se centralizan en `gradle/libs.versions.toml`.
 - [Persistencia con SQLite en Android](https://developer.android.com/training/data-storage/sqlite).
 - [Contrato de captura TakePicture](https://developer.android.com/reference/androidx/activity/result/contract/ActivityResultContracts.TakePicture).
 - [Configuración de pruebas Robolectric](https://robolectric.org/getting-started/).
+
+- [Diálogo biométrico de Android](https://developer.android.com/identity/sign-in/biometric-auth).
+- [Controles del sensor de huella del emulador](https://developer.android.com/studio/run/emulator-extended-controls).

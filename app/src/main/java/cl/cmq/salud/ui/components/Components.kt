@@ -1,6 +1,8 @@
 package cl.cmq.salud.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,6 +21,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
+import androidx.compose.ui.semantics.Role
 import cl.cmq.salud.model.*
 import cl.cmq.salud.ui.theme.*
 
@@ -91,12 +96,34 @@ fun CampoFormulario(valor: String, etiqueta: String, onCambio: (String) -> Unit,
 
 @Composable
 fun <T> SelectorOpciones(etiqueta: String, seleccion: String, opciones: List<T>, texto: (T) -> String,
-                        onSeleccionar: (T) -> Unit, modifier: Modifier = Modifier, error: String? = null) {
+                        onSeleccionar: (T) -> Unit, modifier: Modifier = Modifier, error: String? = null, habilitado: Boolean = true,
+                        onPulsacionProlongada: (() -> Unit)? = null) {
     var expandido by remember { mutableStateOf(false) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(7.dp)) {
         if (etiqueta.isNotEmpty()) Text(etiqueta, style = MaterialTheme.typography.titleMedium)
         Box {
-            OutlinedButton(onClick = { expandido = true }, shape = RoundedCornerShape(14.dp),
+            if (onPulsacionProlongada != null) {
+                val configuracion = LocalViewConfiguration.current
+                val pulsacion = remember(configuracion) {
+                    object : ViewConfiguration by configuracion {
+                        override val longPressTimeoutMillis: Long = 3_000L
+                    }
+                }
+                CompositionLocalProvider(LocalViewConfiguration provides pulsacion) {
+                    Surface(shape = RoundedCornerShape(14.dp), color = Color.Transparent,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        modifier = Modifier.fillMaxWidth()) {
+                        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                            .combinedClickable(enabled = habilitado, role = Role.Button,
+                                onClick = { expandido = true }, onLongClick = onPulsacionProlongada)
+                            .padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(seleccion, modifier = Modifier.weight(1f), color = Grafito, textAlign = TextAlign.Start,
+                                style = MaterialTheme.typography.bodyLarge)
+                            Icon(Icons.Outlined.ExpandMore, null, tint = GrisTexto)
+                        }
+                    }
+                }
+            } else OutlinedButton(onClick = { expandido = true }, enabled = habilitado, shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)) {
                 Text(seleccion, modifier = Modifier.weight(1f), color = Grafito, textAlign = TextAlign.Start,
