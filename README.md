@@ -1,62 +1,67 @@
 # CMQ Salud — Gestión documental
 
-Aplicación Android para demostrar el registro, consulta y revisión de documentos laborales y administrativos de funcionarios de CMQ Salud. Desarrollada con **Kotlin, Jetpack Compose y arquitectura MVVM** como proyecto académico de DSY1105.
+Aplicación Android para registrar, consultar y revisar documentos laborales y administrativos de funcionarios de CMQ Salud. Desarrollada con **Kotlin, Jetpack Compose, arquitectura MVVM y SQLite** como proyecto académico de DSY1105.
 
 | Información académica | Detalle |
 | --- | --- |
 | Integrantes | Ángel Quintero, Food Fontus y Máximo Lugo |
 | Sección | 004-D |
 | Docente | Bastian Lisperguer |
-| Versión | 0.1.0 — Base navegable de demostración |
+| Versión | 0.2.1 — Perfiles personalizados y documentos de ejemplo |
 
 ## Objetivo y estado actual
 
-El proyecto busca facilitar la organización y el seguimiento de antecedentes documentales mediante dos perfiles: funcionario y revisor. Esta versión implementa el flujo inicial con cinco pantallas conectadas, formularios con validación y cambios de estado visibles en la interfaz.
+El proyecto busca facilitar la organización y el seguimiento de antecedentes documentales mediante dos perfiles: funcionario y revisor. Incluye seis pantallas conectadas: acceso, listado, registro, detalle, pendientes y perfil.
 
-Todos los usuarios y documentos incluidos son ficticios. El acceso se realiza mediante selección de perfiles de demostración, sin credenciales institucionales.
-
-**Los datos se mantienen en memoria:** los registros y las decisiones se conservan al cambiar de perfil durante la misma ejecución, pero se restablecen al finalizar el proceso de la aplicación. La persistencia local todavía no está implementada.
+Los usuarios y los documentos iniciales son ficticios. El acceso permite seleccionar perfiles de demostración sin credenciales institucionales. Los documentos añadidos, los adjuntos y las revisiones **permanecen al cerrar y volver a abrir la aplicación**. Al iniciar un nuevo proceso se vuelve a seleccionar el perfil; los datos se recuperan desde SQLite.
 
 ## Funcionalidades disponibles
 
-- Selección de perfil de funcionario o revisor.
 - Listado de documentos con búsqueda por título y filtros por tipo y estado.
-- Registro de un documento con título, tipo, observación y adjunto simulado.
+- Registro con título, tipo, observación y un adjunto.
+- Digitalización de una página mediante la cámara del dispositivo, guardada como imagen JPG.
+- Vista previa de imágenes dentro de la aplicación, respetando la orientación de la cámara.
+- Selección de archivos PDF, JPG y PNG mediante el selector del sistema, con límite de 10 MiB.
+- Copia privada de los adjuntos seleccionados: el registro no depende de conservar el archivo original.
+- Visualización de PDF dentro de la aplicación, con navegación por páginas y apertura externa opcional.
 - Validación del formulario y mensajes de error o confirmación.
 - Consulta del detalle, estado e historial de un documento.
-- Bandeja de documentos pendientes para el revisor.
-- Aprobación o rechazo de documentos; el rechazo requiere una observación.
-- Actualización de listados y detalles mediante estado observable.
-- Navegación entre pantallas y cierre de la sesión de demostración.
+- Aprobación o rechazo por el revisor; el rechazo requiere una observación.
+- Menú del avatar con acceso a **Mi perfil** y cierre de sesión.
+- Reinicio de la demostración con confirmación desde la pantalla de perfil.
 
-El repositorio limita la consulta del funcionario a sus propios documentos y la del revisor a los documentos de otros titulares de su centro. Estas restricciones corresponden al prototipo académico y no constituyen autenticación ni autorización de un servicio institucional.
+El funcionario consulta sus propios documentos y el revisor consulta los de otros titulares de su centro. Estas restricciones corresponden al prototipo académico; no constituyen autenticación institucional.
+
+Los cinco documentos iniciales contienen PDF de muestra con el título, titular y centro correspondientes. La opción **Generar PDF de ejemplo al guardar** también crea un adjunto real con los datos del formulario. Estos archivos tienen formato de certificado, antecedente laboral o registro administrativo y están identificados como documentos de demostración.
+
+Los perfiles son **Ángel Quintero**, **Food Fontus**, **Máximo Lugo** y **Dr. Pedro Soto** (revisor). Ángel, Food y el revisor pertenecen al **Centro Médico Quilpué**; Máximo pertenece al **Centro Médico Belloto**. Al actualizar desde la versión anterior se cambian las etiquetas antiguas y se completan los adjuntos de muestra sin borrar los registros, las revisiones ni los archivos ya guardados.
 
 ## Arquitectura MVVM
 
-La aplicación separa la presentación, el estado de la interfaz y el acceso a los datos:
-
 ```text
-Acción del usuario
-       ↓
 Interfaz Compose (ui)
-       ↓ evento
+       ↓ eventos
 CmqViewModel (viewmodel)
-       ↓ consulta u operación
-DocumentoRepository → DemoDocumentoRepository (repository)
-       ↓ datos y resultados mediante StateFlow
-CmqViewModel → nuevo estado → interfaz actualizada
+       ↓ operaciones en Dispatchers.IO
+DocumentoRepository
+       └── SQLiteDocumentoRepository
+              ├── Reglas de registro y revisión
+              ├── DocumentoDatabase → SQLite
+              └── ArchivoAdjuntoStore → archivos privados
+       ↓ StateFlow
+Nuevo estado → interfaz actualizada
 ```
 
 | Capa | Responsabilidad |
 | --- | --- |
-| `ui/` | Presentar el estado, recibir acciones y enviarlas mediante callbacks. Incluye pantallas, componentes, tema y navegación. |
-| `viewmodel/` | Gestionar el perfil activo, filtros, estado del formulario, validaciones y procesamiento de eventos. Expone estado mediante `StateFlow`. |
-| `model/` | Definir usuarios, documentos, adjuntos de demostración, revisiones, eventos y estados. |
-| `repository/` | Centralizar el acceso a los datos y las restricciones de consulta y revisión. La implementación actual utiliza memoria. |
+| `ui/` | Presentar el estado, recibir acciones y gestionar navegación, contratos de cámara/selector y vista previa. |
+| `viewmodel/` | Gestionar perfil activo, filtros, formulario, validaciones, carga, errores y eventos. Coordinar las operaciones de disco fuera del hilo de la interfaz. |
+| `model/` | Definir usuarios, documentos, adjuntos, revisiones, eventos y estados. |
+| `repository/` | Aplicar restricciones, acceder a SQLite y gestionar los archivos temporales y definitivos. |
 
-`MainActivity` inicia Compose y conecta el ViewModel con la interfaz. `CmqApplication` proporciona una instancia compartida del repositorio. `CmqApp` contiene el `NavHost` y mantiene el `NavController` dentro de la capa de interfaz.
+`MainActivity` inicia Compose. `CmqApplication` proporciona las instancias compartidas del repositorio y del almacén de adjuntos. `CmqApp` contiene el `NavHost`, los contratos de Activity Result y los callbacks de navegación. El ViewModel no conoce el `NavController`.
 
-La base utiliza un ViewModel compartido por el flujo. El contrato `DocumentoRepository` separa las pantallas de la implementación de almacenamiento y permite incorporar posteriormente una fuente persistente.
+El repositorio SQLite reutiliza las reglas de `DemoDocumentoRepository`, cuya implementación en memoria también permite probarlas por separado. Cada operación guarda primero los cambios en una transacción y publica después el nuevo estado. La implementación actual reescribe el conjunto de documentos dentro de la transacción, una solución acotada para el volumen del prototipo.
 
 ### Estructura del código
 
@@ -66,57 +71,86 @@ app/src/main/java/cl/cmq/salud/
 ├── CmqApplication.kt
 ├── ui/
 │   ├── CmqApp.kt
-│   ├── access/             # Acceso de demostración
-│   ├── documents/          # Listado, búsqueda y filtros
-│   ├── documentform/       # Registro de documentos
-│   ├── documentdetail/     # Detalle, historial y revisión
-│   ├── review/             # Bandeja de pendientes
-│   ├── components/         # Componentes reutilizables
-│   └── theme/              # Estilo visual
+│   ├── access/
+│   ├── documents/
+│   ├── documentform/
+│   ├── documentdetail/
+│   ├── review/
+│   ├── profile/
+│   ├── components/          # Componentes reutilizables y visores de imágenes/PDF
+│   └── theme/
 ├── viewmodel/
 ├── model/
 └── repository/
+    ├── DocumentoRepository.kt
+    ├── DemoDocumentoRepository.kt
+    ├── SQLiteDocumentoRepository.kt
+    ├── ArchivoAdjuntoStore.kt
+    └── local/
+        ├── DocumentoDatabase.kt
+        ├── DocumentoEjemploPdf.kt
+        └── HelveticaMetricas.kt
 ```
 
-## Requisitos para ejecutar el proyecto
+## Persistencia y archivos
+
+SQLite se utiliza directamente mediante `SQLiteOpenHelper`, sin Room ni un servidor externo. La base privada `cmq_documentos.db` contiene:
+
+| Tabla | Contenido |
+| --- | --- |
+| `documentos` | Metadatos, titular, centro, estado, datos del adjunto y última revisión. |
+| `eventos` | Historial ordenado; clave foránea al documento con borrado en cascada. |
+| `configuracion` | Indicador de inicialización para insertar los ejemplos solo una vez. |
+
+Las imágenes y los PDF se guardan en `files/adjuntos/`, dentro del almacenamiento privado. SQLite guarda su ruta y metadatos, no el contenido binario. Las capturas e importaciones todavía no guardadas utilizan `cache/adjuntos_pendientes/`; los borradores no son persistentes y pueden perderse al terminar el proceso.
+
+La cámara se abre con `ActivityResultContracts.TakePicture`. Un `FileProvider` concede acceso temporal al archivo de captura. La app delega la captura en la aplicación de cámara del dispositivo y no solicita acceso general al almacenamiento ni permiso directo de cámara. La importación usa `OpenDocument` y copia el contenido seleccionado al espacio privado.
+
+## Requisitos
 
 - Android Studio compatible con Android Gradle Plugin 9.1.1.
-- JDK 25 para el daemon de Gradle, según `gradle/gradle-daemon-jvm.properties`. La compilación de referencia utilizó JBR 25 de Android Studio.
-- Android SDK Platform **37.0** y Android SDK Build Tools **36.0.0**.
+- JDK 25 para el daemon de Gradle, según `gradle/gradle-daemon-jvm.properties`.
+- Android SDK Platform **37.0** y Build Tools **36.0.0**.
 - Emulador o dispositivo físico con **Android 8.0 / API 26 o superior**.
-- Conexión a Internet durante la primera sincronización para descargar las herramientas y dependencias necesarias.
+- Aplicación de cámara disponible para capturar imágenes; para probar en emulador, una cámara virtual configurada.
+- Conexión a Internet durante la primera sincronización y primera descarga de las dependencias de prueba.
 
-El repositorio incluye Gradle Wrapper; no requiere instalar Gradle por separado. El bytecode de la aplicación se configura para Java/Kotlin 17, independientemente del JDK usado por el daemon.
+El proyecto incluye Gradle Wrapper. El bytecode de la aplicación se configura para Java/Kotlin 17, independientemente del JDK del daemon.
 
-## Instalación y ejecución en Android Studio
+## Ejecución en Android Studio
 
-1. Clonar el repositorio. La base inicial está disponible en la rama `dev-angel`; seleccionar esa rama para probar esta entrega.
-2. Abrir en Android Studio la carpeta raíz que contiene `settings.gradle.kts` y `gradlew`, en lugar de abrir solamente `app/`.
-3. Instalar los componentes del SDK indicados desde **SDK Manager** y esperar a que termine la sincronización de Gradle.
-4. Revisar la configuración de Gradle JDK si la sincronización informa un problema con Java. El proyecto establece Java 25 como criterio del daemon.
-5. Crear un dispositivo virtual desde **Device Manager**, o conectar un teléfono con depuración USB habilitada y autorizar la conexión.
+1. Clonar el repositorio y seleccionar la rama que contiene esta versión. La rama de desarrollo inicial es `dev-angel`.
+2. Abrir la carpeta raíz que contiene `settings.gradle.kts` y `gradlew`, en lugar de abrir solamente `app/`.
+3. Instalar los componentes indicados desde **SDK Manager** y esperar a que termine la sincronización de Gradle.
+4. Revisar la configuración de Gradle JDK si hay un problema con Java. El proyecto establece Java 25 como criterio del daemon.
+5. Crear un dispositivo virtual desde **Device Manager**, o conectar un teléfono con depuración USB habilitada y autorizarlo.
 6. Seleccionar el módulo **app**, elegir el dispositivo y ejecutar **Run**.
 
-La pantalla inicial permite seleccionar un perfil de demostración. No se necesita una cuenta externa ni configurar un servidor.
+Android Studio genera `local.properties` con la ruta del SDK de cada equipo. Ese archivo está excluido del repositorio. No se necesita configurar un servidor ni una cuenta externa.
 
-Android Studio genera `local.properties` con la ruta del SDK de cada equipo. Ese archivo está excluido del repositorio y no debe copiarse desde otro entorno.
+## Recorrido para probar cámara y persistencia
 
-## Recorrido de demostración
+1. Seleccionar **Ángel Quintero** y entrar.
+2. Abrir **Nuevo documento**, ingresar un título y seleccionar un tipo.
+3. Pulsar **Escanear**, fotografiar una página y confirmar la captura en la cámara.
+4. Comprobar la vista previa y guardar el documento. Si la captura se cancela, se conserva el adjunto anterior.
+5. Abrir el adjunto desde el detalle para comprobar la imagen guardada.
+6. Cerrar la aplicación, finalizar su proceso y volver a abrirla. Seleccionar el mismo funcionario y verificar que el documento y su imagen siguen disponibles.
+7. Cerrar sesión desde el avatar e ingresar como **Dr. Pedro Soto**.
+8. Abrir el documento pendiente y aprobarlo o rechazarlo, indicando una observación para el rechazo.
+9. Volver a cerrar y abrir la app; comprobar el estado y el historial con el perfil del funcionario.
 
-1. Ingresar como **Funcionario Demo A** y consultar el listado inicial.
-2. Probar la búsqueda, los filtros y la navegación hacia el detalle de un documento.
-3. Abrir **Nuevo documento**, ingresar un título y seleccionar un tipo.
-4. Utilizar **Elegir archivo → Usar ejemplo** para adjuntar el PDF simulado y guardar. El formulario muestra errores si faltan datos obligatorios o el título no cumple la longitud permitida.
-5. Consultar el detalle del registro creado, inicialmente pendiente de revisión.
-6. Salir y seleccionar **Revisor Demo A**, sin finalizar el proceso de la aplicación.
-7. Abrir la bandeja de pendientes, seleccionar el documento y aprobarlo o rechazarlo. Para rechazar, ingresar una observación.
-8. Volver al perfil del funcionario y comprobar el cambio de estado y el historial.
+También puede probarse **Elegir archivo** con un PDF, JPG o PNG. La captura actual digitaliza una página como imagen: no incluye OCR, recorte automático ni generación de PDF multipágina.
 
-Los perfiles **Funcionario Demo B** y **Funcionario Demo C** permiten comprobar la separación de expedientes y centros. El funcionario C pertenece a un centro distinto del revisor A.
+### Reiniciar la demostración
+
+Desde cualquier perfil, abrir **avatar → Mi perfil → Reiniciar datos locales** y confirmar.
+
+El reinicio afecta a **todos los perfiles del dispositivo**: elimina los documentos añadidos, los adjuntos privados, las decisiones registradas y el formulario activo. Restaura los cinco documentos de ejemplo con sus estados originales y vuelve a la pantalla de acceso. Si se cancela la confirmación, no se modifica nada. No elimina archivos originales seleccionados desde otras ubicaciones del dispositivo.
 
 ## Compilación y pruebas
 
-Desde una terminal en la raíz del proyecto, con Java y el SDK configurados:
+Desde una terminal en la raíz, con Java y el SDK configurados:
 
 **Windows / PowerShell**
 
@@ -134,40 +168,34 @@ bash ./gradlew :app:testDebugUnitTest
 bash ./gradlew :app:lintDebug
 ```
 
-El APK de depuración se genera en `app/build/outputs/apk/debug/app-debug.apk`.
+APK de depuración: `app/build/outputs/apk/debug/app-debug.apk`.
 
-Las pruebas unitarias del repositorio verifican el aislamiento entre funcionarios, la restricción por centro, el rechazo con observación obligatoria, la protección de decisiones ya registradas y la visibilidad de nuevos documentos según el perfil.
+Las pruebas incluyen reglas de acceso y revisión, reapertura de SQLite, recuperación de adjuntos e historial, reinicio de la demostración, fallo de escritura, captura JPEG y validación de archivos. Las pruebas de integración local utilizan Robolectric; la toma real de fotografías y el recorrido visual deben verificarse en un teléfono o emulador.
 
-### Verificación registrada para la base inicial
+Verificación de la versión 0.2.1 realizada el 23 de octubre de 2026 en Windows con JBR 25:
 
-| Comprobación | Resultado registrado |
+| Comprobación | Resultado |
 | --- | --- |
-| Compilación de depuración | Correcta; APK generado |
-| Pruebas unitarias | 5 pruebas, sin fallos ni errores |
-| Android Lint | Sin errores; 12 avisos |
-| Ejecución y recorrido manual en dispositivo | Pendiente de verificación |
+| `assembleDebug` | Correcto; APK generado. |
+| `testDebugUnitTest` | 18 pruebas, sin fallos ni errores. |
+| `lintDebug` | Sin errores; 14 advertencias. |
+| Captura real y recorrido visual | Pendientes de prueba en un dispositivo. |
 
-La verificación inicial se realizó en Windows con JBR 25 y Gradle 9.3.1. La validación visual y del flujo completo requiere ejecutar la aplicación en un dispositivo o emulador disponible.
+## Limitaciones y siguientes etapas
 
-## Alcance pendiente
-
-| Funcionalidad | Situación |
-| --- | --- |
-| Persistencia con Room | Prevista para el MVP local; todavía no implementada. |
-| Cámara, selección y visualización de archivos reales | Pendientes. Los adjuntos actuales son ejemplos simulados. |
-| Historial persistente | Pendiente; el historial actual se mantiene en memoria. |
-| Autenticación institucional | Fuera de esta versión. |
-| SharePoint, correo y sincronización entre dispositivos | Fuera de esta versión. |
-
-Los botones relacionados con archivos reales o cámara informan su estado de implementación. La base no realiza capturas, transferencias ni almacenamiento de documentos reales.
+- La sesión de demostración se elige nuevamente al iniciar un proceso nuevo.
+- Cada documento admite un solo adjunto de hasta 10 MiB.
+- La captura no incluye OCR, detección de bordes, corrección de perspectiva ni documentos multipágina.
+- Los PDF protegidos con contraseña no se abren en el visor interno.
+- Autenticación institucional, SharePoint, correo y sincronización entre dispositivos quedan fuera de esta versión.
 
 ## Consideraciones del entorno
 
-- **Emulador:** requiere una configuración de virtualización y aceleración compatible con el equipo. Como alternativa, puede utilizarse un teléfono Android con depuración USB.
-- **Rutas con tildes en Windows:** el proyecto incluye `android.overridePathCheck=true` y un ajuste en `gradle/windows-test-paths.gradle` para ejecutar las pruebas cuando la ruta contiene caracteres no ASCII. La caché de Gradle debe estar en una ruta sin tildes. El ajuste no se ha validado con configuration cache.
-- **Archivos locales:** las cachés, compilaciones, configuración personal del SDK y documentación de trabajo están excluidas mediante `.gitignore`.
+- **Emulador:** requiere virtualización y aceleración compatibles con el equipo. Puede utilizarse un teléfono Android con depuración USB como alternativa.
+- **Rutas con tildes en Windows:** el proyecto incluye `android.overridePathCheck=true` y `gradle/windows-test-paths.gradle`. La caché de Gradle debe estar en una ruta sin tildes. El ajuste no se ha validado con configuration cache.
+- **Git:** las cachés, compilaciones, configuración personal del SDK y documentación de trabajo están excluidas mediante `.gitignore`.
 
-## Tecnologías y versiones
+## Tecnologías
 
 | Tecnología | Versión o configuración |
 | --- | --- |
@@ -180,7 +208,15 @@ Los botones relacionados con archivos reales o cámara informan su estado de imp
 | Lifecycle / ViewModel | 2.9.4 |
 | Navigation Compose | 2.9.5 |
 | Kotlin Coroutines | 1.10.2 |
-| Pruebas | JUnit 4.13.2 |
+| AndroidX ExifInterface | 1.4.2 |
+| Base local | SQLite mediante SQLiteOpenHelper |
+| Pruebas | JUnit 4.13.2 y Robolectric 4.17 |
 | SDK de compilación / destino / mínimo | 37.0 / 36 / 26 |
 
-Las versiones se centralizan en `gradle/libs.versions.toml`. La configuración utiliza Kotlin integrado en AGP, por lo que no aplica adicionalmente el plugin `org.jetbrains.kotlin.android`.
+Las dependencias se centralizan en `gradle/libs.versions.toml`.
+
+## Referencias técnicas
+
+- [Persistencia con SQLite en Android](https://developer.android.com/training/data-storage/sqlite).
+- [Contrato de captura TakePicture](https://developer.android.com/reference/androidx/activity/result/contract/ActivityResultContracts.TakePicture).
+- [Configuración de pruebas Robolectric](https://robolectric.org/getting-started/).

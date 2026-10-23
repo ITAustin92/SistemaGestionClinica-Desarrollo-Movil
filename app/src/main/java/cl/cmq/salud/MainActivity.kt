@@ -16,7 +16,7 @@ class MainActivity : ComponentActivity() {
         val repository = (application as CmqApplication).documentoRepository
         setContent {
             CmqTheme {
-                val vm: CmqViewModel = viewModel(factory = CmqViewModel.factory(repository))
+                val vm: CmqViewModel = viewModel(factory = CmqViewModel.factory(repository, (application as CmqApplication).archivos))
                 CmqApp(vm)
             }
         }

@@ -23,9 +23,9 @@ import cl.cmq.salud.viewmodel.FormularioUiState
 @Composable
 fun RegistroDocumentoScreen(state: FormularioUiState, onTitulo: (String) -> Unit,
     onTipo: (TipoDocumento) -> Unit, onObservacion: (String) -> Unit,
-    onAdjuntarDemo: () -> Unit, onCamara: () -> Unit, onGuardar: () -> Unit, onVolver: () -> Unit) {
+    onAdjuntarDemo: () -> Unit, onAdjuntar: () -> Unit, onCamara: () -> Unit, onVistaPrevia: () -> Unit,
+    onGuardar: () -> Unit, onVolver: () -> Unit) {
     var confirmarSalida by rememberSaveable { mutableStateOf(false) }
-    var elegirEjemplo by rememberSaveable { mutableStateOf(false) }
     val volver = { if (state.tieneCambios) confirmarSalida = true else onVolver() }
     BackHandler { volver() }
     if (confirmarSalida) AlertDialog(
@@ -33,11 +33,6 @@ fun RegistroDocumentoScreen(state: FormularioUiState, onTitulo: (String) -> Unit
         text = { Text("Los datos de este formulario todavía no se han guardado.") },
         confirmButton = { TextButton(onClick = { confirmarSalida = false; onVolver() }) { Text("Descartar") } },
         dismissButton = { TextButton(onClick = { confirmarSalida = false }) { Text("Seguir editando") } })
-    if (elegirEjemplo) AlertDialog(
-        onDismissRequest = { elegirEjemplo = false }, title = { Text("Adjunto de demostración") },
-        text = { Text("Esta base utiliza un PDF de ejemplo simulado. La selección de archivos reales se incorporará en la siguiente etapa.") },
-        confirmButton = { TextButton(onClick = { onAdjuntarDemo(); elegirEjemplo = false }) { Text("Usar ejemplo") } },
-        dismissButton = { TextButton(onClick = { elegirEjemplo = false }) { Text("Cancelar") } })
 
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -53,11 +48,11 @@ fun RegistroDocumentoScreen(state: FormularioUiState, onTitulo: (String) -> Unit
             ayuda = "Opcional · Máximo 500 caracteres", error = state.errores["observacion"])
         Text("Adjunto *", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = { elegirEjemplo = true }, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = MaterialTheme.shapes.small) {
+            OutlinedButton(onClick = onAdjuntar, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = MaterialTheme.shapes.small) {
                 Icon(Icons.Outlined.AttachFile, null, Modifier.size(20.dp)); Spacer(Modifier.width(5.dp)); Text("Elegir archivo")
             }
             OutlinedButton(onClick = onCamara, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = MaterialTheme.shapes.small) {
-                Icon(Icons.Outlined.CameraAlt, null, Modifier.size(20.dp)); Spacer(Modifier.width(5.dp)); Text("Tomar foto")
+                Icon(Icons.Outlined.CameraAlt, null, Modifier.size(20.dp)); Spacer(Modifier.width(5.dp)); Text("Escanear")
             }
         }
         if (state.adjunto != null) {
@@ -68,11 +63,19 @@ fun RegistroDocumentoScreen(state: FormularioUiState, onTitulo: (String) -> Unit
                     Text(state.adjunto.nombre, style = MaterialTheme.typography.titleMedium)
                     Text("${state.adjunto.formato} · ${state.adjunto.tamano}", color = GrisTexto)
                 }
-                TextButton(onClick = { elegirEjemplo = true }) { Text("Cambiar") }
+                TextButton(onClick = onAdjuntar) { Text("Cambiar") }
+            }
+            if (state.adjunto.rutaLocal != null) {
+                if (state.adjunto.mimeType.startsWith("image/")) {
+                    ImagenAdjunto(state.adjunto, Modifier.fillMaxWidth().height(220.dp))
+                }
+                TextButton(onClick = onVistaPrevia) { Text("Revisar adjunto") }
             }
         }
         state.errores["adjunto"]?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Text("PDF, JPG o PNG · Hasta 10 MiB", color = GrisTexto, style = MaterialTheme.typography.bodySmall)
+        Text("Escanea una página con la cámara y confirma que el texto se lea antes de guardarla. Se almacena como imagen, sin reconocimiento de texto ni recorte automático.", color = GrisTexto, style = MaterialTheme.typography.bodySmall)
+        TextButton(onClick = onAdjuntarDemo) { Text("Generar PDF de ejemplo al guardar") }
         BotonPrincipal("Guardar documento", onGuardar)
         PieDemostracion()
     }

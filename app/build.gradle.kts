@@ -10,10 +10,11 @@ android {
         applicationId = "cl.cmq.salud"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 3
+        versionName = "0.2.1"
     }
     buildFeatures { compose = true }
+    testOptions { unitTests.isIncludeAndroidResources = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -29,6 +30,7 @@ apply(from = rootProject.file("gradle/windows-test-paths.gradle"))
 
 dependencies {
     implementation(libs.androidx.core)
+    implementation(libs.androidx.exif)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.androidx.lifecycle.viewmodel)
@@ -41,4 +43,10 @@ dependencies {
     implementation(libs.coroutines.android)
     debugImplementation(libs.androidx.compose.tooling)
     testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+}
+
+tasks.withType<Test>().configureEach {
+    jvmArgs("--add-opens=java.base/java.lang=ALL-UNNAMED", "--add-opens=java.base/java.util=ALL-UNNAMED")
+    systemProperty("cmq.test.pdfReportDir", layout.buildDirectory.dir("reports/documentos-ejemplo").get().asFile.absolutePath)
 }

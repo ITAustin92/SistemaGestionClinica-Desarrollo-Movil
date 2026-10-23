@@ -12,7 +12,13 @@ enum class EstadoDocumento(val etiqueta: String) {
     PENDIENTE("Pendiente"), APROBADO("Aprobado"), RECHAZADO("Rechazado")
 }
 
-data class AdjuntoDemo(val nombre: String, val formato: String, val tamano: String = "240 KiB")
+data class Adjunto(
+    val nombre: String,
+    val formato: String,
+    val tamano: String = "PDF de ejemplo",
+    val rutaLocal: String? = null,
+    val mimeType: String = "application/pdf",
+)
 
 data class EventoDocumento(val titulo: String, val actor: String, val fecha: String)
 
@@ -26,7 +32,7 @@ data class Documento(
     val titulo: String,
     val tipo: TipoDocumento,
     val observacion: String,
-    val adjunto: AdjuntoDemo,
+    val adjunto: Adjunto,
     val fechaCarga: String,
     val estado: EstadoDocumento = EstadoDocumento.PENDIENTE,
     val revision: RevisionDocumento? = null,

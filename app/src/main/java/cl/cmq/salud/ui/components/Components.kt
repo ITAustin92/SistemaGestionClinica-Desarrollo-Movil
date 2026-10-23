@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,6 +17,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import cl.cmq.salud.model.*
 import cl.cmq.salud.ui.theme.*
 
@@ -33,16 +36,34 @@ fun MarcaCmq(modifier: Modifier = Modifier, compacta: Boolean = false) {
     }
 }
 
+data class AccionesPerfil(val usuario: Usuario, val abrir: () -> Unit, val salir: () -> Unit)
+val LocalAccionesPerfil = staticCompositionLocalOf<AccionesPerfil?> { null }
+
 @Composable
 fun Encabezado(onVolver: (() -> Unit)? = null, usuario: Usuario? = null, onSalir: (() -> Unit)? = null) {
+    val perfil = LocalAccionesPerfil.current
+    var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (onVolver != null) IconButton(onClick = onVolver) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Volver") }
         MarcaCmq(Modifier.weight(1f), compacta = onVolver != null)
-        if (onSalir != null) TextButton(onClick = onSalir) { Text("Salir") }
-        if (usuario != null && onVolver == null) {
-            Box(Modifier.size(38.dp).background(Aqua, CircleShape), contentAlignment = Alignment.Center) {
-                Text(if (usuario.rol == Rol.REVISOR) "R" else "F", color = Turquesa, fontWeight = FontWeight.Bold)
+        if (perfil != null) {
+            Box {
+                IconButton(onClick = { menu = true }) {
+                    Box(Modifier.size(38.dp).background(Aqua, CircleShape), contentAlignment = Alignment.Center) {
+                        Text(perfil.usuario.nombre.removePrefix("Dr. ").split(' ').filter { it.isNotBlank() }
+                            .take(2).joinToString("") { it.first().uppercase() }, color = Turquesa,
+                            fontWeight = FontWeight.Bold, modifier = Modifier.semantics { contentDescription = "Abrir menú de perfil" })
+                    }
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("Mi perfil") }, leadingIcon = { Icon(Icons.Outlined.Person, null) },
+                        onClick = { menu = false; perfil.abrir() })
+                    DropdownMenuItem(text = { Text("Cerrar sesión") }, leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Logout, null) },
+                        onClick = { menu = false; perfil.salir() })
+                }
             }
+        } else if (onSalir != null) {
+            TextButton(onClick = onSalir) { Text("Salir") }
         }
     }
 }

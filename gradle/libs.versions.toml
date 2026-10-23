@@ -8,6 +8,8 @@ lifecycle = "2.9.4"
 navigation = "2.9.5"
 coroutines = "1.10.2"
 junit = "4.13.2"
+robolectric = "4.17"
+exif = "1.4.2"
 
 [libraries]
 androidx-core = { module = "androidx.core:core-ktx", version.ref = "core" }
@@ -23,6 +25,8 @@ androidx-compose-material = { module = "androidx.compose.material3:material3" }
 androidx-compose-icons = { module = "androidx.compose.material:material-icons-extended" }
 coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 junit = { module = "junit:junit", version.ref = "junit" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+androidx-exif = { module = "androidx.exifinterface:exifinterface", version.ref = "exif" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

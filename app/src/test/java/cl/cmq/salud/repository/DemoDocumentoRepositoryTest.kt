@@ -32,7 +32,7 @@ class DemoDocumentoRepositoryTest {
     @Test fun altaValidaApareceSoloEnElAmbitoAutorizado() {
         val repository = DemoDocumentoRepository()
         val funcionario = repository.usuarios[0]
-        val id = repository.registrar(funcionario, "Nuevo certificado", TipoDocumento.CERTIFICADO, "", AdjuntoDemo("demo.pdf", "PDF"))
+        val id = repository.registrar(funcionario, "Nuevo certificado", TipoDocumento.CERTIFICADO, "", Adjunto("demo.pdf", "PDF"))
         assertNotNull(repository.buscar(funcionario, id))
         assertNull(repository.buscar(repository.usuarios[1], id))
         assertNotNull(repository.buscar(repository.usuarios.last(), id))
