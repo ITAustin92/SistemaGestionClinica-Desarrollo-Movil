@@ -1,104 +1,58 @@
 package cl.cmq.salud.repository.local
 
-import android.content.ContentValues
 import android.content.Context
-import android.database.Cursor
-import android.database.sqlite.SQLiteDatabase
-import android.database.sqlite.SQLiteOpenHelper
-import cl.cmq.salud.model.*
+import androidx.room.Database
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+import cl.cmq.salud.model.Documento
 
-/** SQLite v1. Los adjuntos son archivos privados; la base guarda solo su ruta. */
-class DocumentoDatabase(context: Context, nombre: String = "cmq_documentos.db") :
-    SQLiteOpenHelper(context.applicationContext, nombre, null, 1) {
+@Database(entities = [DocumentoEntity::class, EventoEntity::class, ConfiguracionEntity::class],
+    version = 2, exportSchema = true)
+abstract class CmqRoomDatabase : RoomDatabase() {
+    abstract fun documentoDao(): DocumentoDao
+}
 
-    override fun onConfigure(db: SQLiteDatabase) { db.setForeignKeyConstraintsEnabled(true) }
+/** Mantiene el contrato del repositorio; toda lectura y escritura pasa por el DAO de Room. */
+class DocumentoDatabase(context: Context, nombre: String = "cmq_documentos.db") : AutoCloseable {
+    private val room = Room.databaseBuilder(context.applicationContext, CmqRoomDatabase::class.java, nombre)
+        .addMigrations(MIGRACION_1_2).build()
+    private val dao get() = room.documentoDao()
+    val writableDatabase: SupportSQLiteDatabase get() = room.openHelper.writableDatabase
+    fun inicializada() = dao.inicializada()
+    fun leer(): List<Documento> = dao.listar().map { it.documento.modelo(it.eventos) }
+    fun guardar(documentos: List<Documento>) = dao.guardar(documentos)
+    override fun close() = room.close()
 
-    override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("""CREATE TABLE documentos (
-            id INTEGER PRIMARY KEY, titular_id INTEGER NOT NULL, titular TEXT NOT NULL,
-            centro TEXT NOT NULL, titulo TEXT NOT NULL, tipo TEXT NOT NULL,
-            observacion TEXT NOT NULL, fecha_carga TEXT NOT NULL, estado TEXT NOT NULL,
-            adjunto_nombre TEXT NOT NULL, adjunto_formato TEXT NOT NULL, adjunto_tamano TEXT NOT NULL,
-            adjunto_ruta TEXT, adjunto_mime TEXT NOT NULL,
-            revisor TEXT, revision_observacion TEXT, revision_fecha TEXT)""")
-        db.execSQL("""CREATE TABLE eventos (
-            documento_id INTEGER NOT NULL REFERENCES documentos(id) ON DELETE CASCADE,
-            posicion INTEGER NOT NULL, titulo TEXT NOT NULL, actor TEXT NOT NULL, fecha TEXT NOT NULL,
-            PRIMARY KEY (documento_id, posicion))""")
-        db.execSQL("CREATE TABLE configuracion (clave TEXT PRIMARY KEY, valor TEXT NOT NULL)")
-    }
-
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        error("Falta una migración de SQLite de $oldVersion a $newVersion.")
-    }
-
-    fun inicializada(): Boolean = readableDatabase.rawQuery(
-        "SELECT 1 FROM configuracion WHERE clave = ?", arrayOf("inicializada")
-    ).use { it.moveToFirst() }
-
-    fun leer(): List<Documento> {
-        val db = readableDatabase
-        return db.query("documentos", null, null, null, null, null, "id DESC").use { cursor ->
-            buildList {
-                while (cursor.moveToNext()) {
-                    val id = cursor.getLong(cursor.getColumnIndexOrThrow("id"))
-                    val historial = db.query("eventos", null, "documento_id = ?", arrayOf(id.toString()),
-                        null, null, "posicion ASC").use { eventos ->
-                        buildList {
-                            while (eventos.moveToNext()) add(EventoDocumento(
-                                eventos.texto("titulo"), eventos.texto("actor"), eventos.texto("fecha")))
-                        }
-                    }
-                    add(Documento(id, cursor.getLong(cursor.getColumnIndexOrThrow("titular_id")),
-                        cursor.texto("titular"), cursor.texto("centro"), cursor.texto("titulo"),
-                        TipoDocumento.valueOf(cursor.texto("tipo")), cursor.texto("observacion"),
-                        Adjunto(cursor.texto("adjunto_nombre"), cursor.texto("adjunto_formato"),
-                            cursor.texto("adjunto_tamano"), cursor.opcional("adjunto_ruta"), cursor.texto("adjunto_mime")),
-                        cursor.texto("fecha_carga"), EstadoDocumento.valueOf(cursor.texto("estado")),
-                        cursor.opcional("revisor")?.let {
-                            RevisionDocumento(it, cursor.texto("revision_observacion"), cursor.texto("revision_fecha"))
-                        }, historial))
-                }
+    companion object {
+        /** SQLiteOpenHelper v1 -> Room v2. Copia todas las filas y conserva las rutas privadas. */
+        val MIGRACION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""CREATE TABLE documentos_room (
+                    id INTEGER NOT NULL PRIMARY KEY, titular_id INTEGER NOT NULL, titular TEXT NOT NULL,
+                    centro TEXT NOT NULL, titulo TEXT NOT NULL, tipo TEXT NOT NULL,
+                    observacion TEXT NOT NULL, fecha_carga TEXT NOT NULL, estado TEXT NOT NULL,
+                    adjunto_nombre TEXT NOT NULL, adjunto_formato TEXT NOT NULL, adjunto_tamano TEXT NOT NULL,
+                    adjunto_ruta TEXT, adjunto_mime TEXT NOT NULL,
+                    revisor TEXT, revision_observacion TEXT, revision_fecha TEXT)""")
+                db.execSQL("INSERT INTO documentos_room SELECT * FROM documentos")
+                db.execSQL("CREATE TEMP TABLE eventos_respaldo AS SELECT * FROM eventos")
+                db.execSQL("CREATE TABLE configuracion_room (clave TEXT NOT NULL PRIMARY KEY, valor TEXT NOT NULL)")
+                db.execSQL("INSERT INTO configuracion_room SELECT clave, valor FROM configuracion")
+                db.execSQL("DROP TABLE eventos")
+                db.execSQL("DROP TABLE documentos")
+                db.execSQL("DROP TABLE configuracion")
+                db.execSQL("ALTER TABLE documentos_room RENAME TO documentos")
+                // Crear la FK tras renombrar el padre funciona también en SQLite de Android 8.
+                db.execSQL("""CREATE TABLE eventos (
+                    documento_id INTEGER NOT NULL, posicion INTEGER NOT NULL, titulo TEXT NOT NULL,
+                    actor TEXT NOT NULL, fecha TEXT NOT NULL, PRIMARY KEY(documento_id, posicion),
+                    FOREIGN KEY(documento_id) REFERENCES documentos(id) ON UPDATE NO ACTION ON DELETE CASCADE)""")
+                db.execSQL("INSERT INTO eventos SELECT * FROM eventos_respaldo")
+                db.execSQL("DROP TABLE eventos_respaldo")
+                db.execSQL("ALTER TABLE configuracion_room RENAME TO configuracion")
             }
         }
-    }
-
-    /** Una transacción conserva documentos, decisiones e historial como una sola unidad. */
-    fun guardar(documentos: List<Documento>) {
-        val db = writableDatabase
-        db.beginTransaction()
-        try {
-            db.delete("documentos", null, null) // eventos se eliminan mediante la FK.
-            documentos.forEach { documento ->
-                db.insertOrThrow("documentos", null, ContentValues().apply {
-                    put("id", documento.id); put("titular_id", documento.titularId)
-                    put("titular", documento.titular); put("centro", documento.centro)
-                    put("titulo", documento.titulo); put("tipo", documento.tipo.name)
-                    put("observacion", documento.observacion); put("fecha_carga", documento.fechaCarga)
-                    put("estado", documento.estado.name)
-                    put("adjunto_nombre", documento.adjunto.nombre); put("adjunto_formato", documento.adjunto.formato)
-                    put("adjunto_tamano", documento.adjunto.tamano); put("adjunto_ruta", documento.adjunto.rutaLocal)
-                    put("adjunto_mime", documento.adjunto.mimeType)
-                    put("revisor", documento.revision?.revisor)
-                    put("revision_observacion", documento.revision?.observacion)
-                    put("revision_fecha", documento.revision?.fecha)
-                })
-                documento.historial.forEachIndexed { posicion, evento ->
-                    db.insertOrThrow("eventos", null, ContentValues().apply {
-                        put("documento_id", documento.id); put("posicion", posicion)
-                        put("titulo", evento.titulo); put("actor", evento.actor); put("fecha", evento.fecha)
-                    })
-                }
-            }
-            db.insertWithOnConflict("configuracion", null, ContentValues().apply {
-                put("clave", "inicializada"); put("valor", "1")
-            }, SQLiteDatabase.CONFLICT_REPLACE)
-            db.setTransactionSuccessful()
-        } finally { db.endTransaction() }
-    }
-
-    private fun Cursor.texto(nombre: String): String = getString(getColumnIndexOrThrow(nombre))
-    private fun Cursor.opcional(nombre: String): String? = getColumnIndexOrThrow(nombre).let {
-        if (isNull(it)) null else getString(it)
     }
 }
