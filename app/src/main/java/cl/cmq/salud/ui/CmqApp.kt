@@ -137,9 +137,11 @@ fun CmqApp(viewModel: CmqViewModel, onAutenticarRevisor: () -> Unit, onConfigura
                                 }
                             }, onVistaPrevia = { ver(state.formulario.adjunto) },
                             onGuardar = {
+                                val editando = state.formulario.editando
                                 viewModel.guardar { id ->
                                     viewModel.abrirDetalle()
-                                    nav.navigate(Rutas.detalle(id)) { popUpTo(Rutas.REGISTRO) { inclusive = true } }
+                                    if (editando) nav.popBackStack()
+                                    else nav.navigate(Rutas.detalle(id)) { popUpTo(Rutas.REGISTRO) { inclusive = true } }
                                 }
                             }, onVolver = { viewModel.descartarFormulario(); nav.popBackStack() })
                     }
@@ -152,6 +154,8 @@ fun CmqApp(viewModel: CmqViewModel, onAutenticarRevisor: () -> Unit, onConfigura
                             onAprobar = { viewModel.revisar(id, EstadoDocumento.APROBADO) },
                             onRechazar = { viewModel.revisar(id, EstadoDocumento.RECHAZADO) },
                             onAbrirAdjunto = { ver(viewModel.detalle(id)?.adjunto) },
+                            onEditar = { if (viewModel.editarDocumento(id)) nav.navigate(Rutas.REGISTRO) },
+                            onEliminar = { viewModel.eliminar(id) { nav.popBackStack() } },
                             onVolver = { nav.popBackStack() }, onSalir = salir)
                     }
                 }

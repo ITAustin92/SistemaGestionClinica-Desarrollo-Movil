@@ -20,9 +20,13 @@ import kotlinx.coroutines.withContext
 
 data class FormularioUiState(
     val titulo: String = "", val tipo: TipoDocumento? = null, val observacion: String = "",
+    val documentoOriginal: Documento? = null,
     val adjunto: Adjunto? = null, val errores: Map<String, String> = emptyMap(),
 ) {
-    val tieneCambios: Boolean get() = titulo.isNotBlank() || tipo != null || observacion.isNotBlank() || adjunto != null
+    val editando: Boolean get() = documentoOriginal != null
+    val tieneCambios: Boolean get() = documentoOriginal?.let {
+        titulo != it.titulo || tipo != it.tipo || observacion != it.observacion
+    } ?: (titulo.isNotBlank() || tipo != null || observacion.isNotBlank() || adjunto != null)
 }
 
 data class CmqUiState(
@@ -155,6 +159,19 @@ class CmqViewModel(private val repository: DocumentoRepository, private val arch
         }
     }
     fun detalle(id: Long): Documento? = datos.value.usuario?.let { repository.buscar(it, id) }
+    fun editarDocumento(id: Long): Boolean {
+        if (datos.value.ocupado || datos.value.cargando) return false
+        val usuario = datos.value.usuario ?: return false
+        val documento = repository.buscar(usuario, id) ?: return false
+        if (usuario.rol != Rol.FUNCIONARIO || documento.titularId != usuario.id || documento.estado != EstadoDocumento.PENDIENTE) {
+            mostrarMensaje("Solo puedes editar tus documentos pendientes de revisión.")
+            return false
+        }
+        descartarFormulario()
+        datos.update { it.copy(formulario = FormularioUiState(titulo = documento.titulo, tipo = documento.tipo,
+            observacion = documento.observacion, documentoOriginal = documento, adjunto = documento.adjunto)) }
+        return true
+    }
     fun nuevoDocumento() = descartarFormulario()
     fun descartarFormulario() {
         val ruta = datos.value.formulario.adjunto?.rutaLocal
@@ -173,16 +190,17 @@ class CmqViewModel(private val repository: DocumentoRepository, private val arch
         formulario { it.copy(adjunto = adjunto, errores = it.errores - "adjunto") }
         viewModelScope.launch(ioDispatcher) { archivos.descartar(anterior) }
     }
-    fun adjuntarDemo() { adjuntar(Adjunto("documento_de_ejemplo.pdf", "PDF", "Se genera al guardar")) }
+    fun adjuntarDemo() { if (datos.value.formulario.editando) return; adjuntar(Adjunto("documento_de_ejemplo.pdf", "PDF", "Se genera al guardar")) }
     fun importar(uri: Uri) {
-        if (datos.value.usuario?.rol != Rol.FUNCIONARIO) return
+        if (datos.value.usuario?.rol != Rol.FUNCIONARIO || datos.value.formulario.editando) return
         tarea({ archivos.importar(uri) }, ::adjuntar)
     }
     fun prepararCaptura(onPreparada: (String) -> Unit) {
+        if (datos.value.formulario.editando) return
         tarea({ archivos.crearCaptura().absolutePath }, onPreparada)
     }
     fun recibirCaptura(ruta: String, correcta: Boolean) {
-        if (!correcta || datos.value.usuario?.rol != Rol.FUNCIONARIO) {
+        if (!correcta || datos.value.usuario?.rol != Rol.FUNCIONARIO || datos.value.formulario.editando) {
             cancelarCaptura(ruta)
             if (!correcta) mostrarMensaje("Captura cancelada. El adjunto anterior se conserva.")
             return
@@ -205,8 +223,15 @@ class CmqViewModel(private val repository: DocumentoRepository, private val arch
         }
         formulario { it.copy(errores = errores) }
         if (errores.isNotEmpty()) return
-        tarea({ repository.registrar(usuario, form.titulo, requireNotNull(form.tipo), form.observacion, requireNotNull(form.adjunto)) }) { id ->
-            datos.update { it.copy(formulario = FormularioUiState(), mensaje = "Documento guardado en el dispositivo.") }
+        tarea({
+            val original = form.documentoOriginal
+            if (original != null) {
+                repository.actualizar(usuario, original.id, form.titulo, requireNotNull(form.tipo), form.observacion)
+                original.id
+            } else repository.registrar(usuario, form.titulo, requireNotNull(form.tipo), form.observacion, requireNotNull(form.adjunto))
+        }) { id ->
+            datos.update { it.copy(formulario = FormularioUiState(), mensaje =
+                if (form.editando) "Cambios guardados en el dispositivo." else "Documento guardado en el dispositivo.") }
             onGuardado(id)
         }
     }
@@ -225,6 +250,14 @@ class CmqViewModel(private val repository: DocumentoRepository, private val arch
             datos.update { it.copy(errorRevision = null, mensaje = "Revisión guardada: ${decision.etiqueta.lowercase()}.") }
         }
     }
+    fun eliminar(id: Long, onEliminado: () -> Unit) {
+        val usuario = datos.value.usuario ?: return
+        tarea({ repository.eliminar(usuario, id) }) {
+            datos.update { it.copy(mensaje = "Documento eliminado del dispositivo.") }
+            onEliminado()
+        }
+    }
+
     fun reiniciar() {
         tarea({ repository.reiniciar() }) {
             solicitudBiometricaPendiente = null

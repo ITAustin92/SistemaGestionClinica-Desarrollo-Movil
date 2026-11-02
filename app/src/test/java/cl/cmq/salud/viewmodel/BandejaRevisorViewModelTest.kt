@@ -48,6 +48,73 @@ class BandejaRevisorViewModelTest {
 
     @After fun terminar() { store.clear(); Dispatchers.resetMain() }
 
+    private fun entrarFuncionario() {
+        viewModel.salir(); viewModel.seleccionarUsuario(1); viewModel.entrar()
+    }
+
+    @Test fun editarPrecargaValidaYGuardaElMismoDocumentoConSuAdjunto() = runTest(dispatcher) {
+        entrarFuncionario()
+        val original = requireNotNull(viewModel.detalle(1))
+        assertTrue(viewModel.editarDocumento(1))
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.formulario.tieneCambios)
+        assertEquals(original.adjunto, viewModel.uiState.value.formulario.adjunto)
+        viewModel.adjuntarDemo()
+        assertEquals(original.adjunto, viewModel.uiState.value.formulario.adjunto)
+        viewModel.cambiarTitulo(" ")
+        var guardado: Long? = null
+        viewModel.guardar { guardado = it }
+        advanceUntilIdle()
+        assertNull(guardado)
+        assertTrue(viewModel.uiState.value.formulario.errores.containsKey("titulo"))
+        viewModel.cambiarTitulo("Título corregido")
+        viewModel.cambiarTipo(TipoDocumento.CONTRATO)
+        viewModel.cambiarObservacion("Corrección de datos")
+        viewModel.guardar { guardado = it }
+        advanceUntilIdle()
+        assertEquals(1L, guardado)
+        assertEquals("Título corregido", viewModel.detalle(1)?.titulo)
+        assertEquals(TipoDocumento.CONTRATO, viewModel.detalle(1)?.tipo)
+        assertEquals("Corrección de datos", viewModel.detalle(1)?.observacion)
+        assertEquals(original.adjunto, viewModel.detalle(1)?.adjunto)
+        assertFalse(viewModel.uiState.value.formulario.editando)
+    }
+
+    @Test fun descartarEdicionNoModificaDocumentoYLosRevisadosNoSeEditan() = runTest(dispatcher) {
+        entrarFuncionario()
+        val original = viewModel.detalle(1)
+        assertTrue(viewModel.editarDocumento(1))
+        viewModel.cambiarTitulo("Cambio descartado")
+        viewModel.descartarFormulario()
+        advanceUntilIdle()
+        assertEquals(original, viewModel.detalle(1))
+        assertFalse(viewModel.editarDocumento(2))
+        assertFalse(viewModel.editarDocumento(4))
+    }
+
+    @Test fun eliminarActualizaLaListaYNotificaSoloTrasConfirmarElRepositorio() = runTest(dispatcher) {
+        viewModel.salir()
+        viewModel.seleccionarUsuario(1)
+        viewModel.entrar()
+        var eliminado = false
+        viewModel.eliminar(1) { eliminado = true }
+        assertFalse(eliminado)
+        advanceUntilIdle()
+        assertTrue(eliminado)
+        assertNull(viewModel.detalle(1))
+        assertEquals("Documento eliminado del dispositivo.", viewModel.uiState.value.mensaje)
+    }
+
+    @Test fun unRevisorNoPuedeEliminarNiRecibeCallbackDeExito() = runTest(dispatcher) {
+        var eliminado = false
+        viewModel.eliminar(1) { eliminado = true }
+        advanceUntilIdle()
+        assertFalse(eliminado)
+        assertNotNull(viewModel.detalle(1))
+        assertFalse(viewModel.uiState.value.ocupado)
+        assertNotNull(viewModel.uiState.value.mensaje)
+    }
+
     @Test fun separaPendientesYAprobadosYRechazadosPropiosDelCentro() = runTest(dispatcher) {
         assertEquals(listOf(1L), viewModel.visibles().map { it.id })
         viewModel.seleccionarBandejaRevision(EstadoDocumento.APROBADO)
