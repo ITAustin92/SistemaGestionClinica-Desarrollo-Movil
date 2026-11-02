@@ -1,11 +1,14 @@
 package cl.cmq.salud.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,6 +19,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
+import androidx.compose.ui.semantics.Role
 import cl.cmq.salud.model.*
 import cl.cmq.salud.ui.theme.*
 
@@ -33,16 +41,34 @@ fun MarcaCmq(modifier: Modifier = Modifier, compacta: Boolean = false) {
     }
 }
 
+data class AccionesPerfil(val usuario: Usuario, val abrir: () -> Unit, val salir: () -> Unit)
+val LocalAccionesPerfil = staticCompositionLocalOf<AccionesPerfil?> { null }
+
 @Composable
 fun Encabezado(onVolver: (() -> Unit)? = null, usuario: Usuario? = null, onSalir: (() -> Unit)? = null) {
+    val perfil = LocalAccionesPerfil.current
+    var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (onVolver != null) IconButton(onClick = onVolver) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Volver") }
         MarcaCmq(Modifier.weight(1f), compacta = onVolver != null)
-        if (onSalir != null) TextButton(onClick = onSalir) { Text("Salir") }
-        if (usuario != null && onVolver == null) {
-            Box(Modifier.size(38.dp).background(Aqua, CircleShape), contentAlignment = Alignment.Center) {
-                Text(if (usuario.rol == Rol.REVISOR) "R" else "F", color = Turquesa, fontWeight = FontWeight.Bold)
+        if (perfil != null) {
+            Box {
+                IconButton(onClick = { menu = true }) {
+                    Box(Modifier.size(38.dp).background(Aqua, CircleShape), contentAlignment = Alignment.Center) {
+                        Text(perfil.usuario.nombre.removePrefix("Dr. ").split(' ').filter { it.isNotBlank() }
+                            .take(2).joinToString("") { it.first().uppercase() }, color = Turquesa,
+                            fontWeight = FontWeight.Bold, modifier = Modifier.semantics { contentDescription = "Abrir menú de perfil" })
+                    }
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("Mi perfil") }, leadingIcon = { Icon(Icons.Outlined.Person, null) },
+                        onClick = { menu = false; perfil.abrir() })
+                    DropdownMenuItem(text = { Text("Cerrar sesión") }, leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Logout, null) },
+                        onClick = { menu = false; perfil.salir() })
+                }
             }
+        } else if (onSalir != null) {
+            TextButton(onClick = onSalir) { Text("Salir") }
         }
     }
 }
@@ -70,12 +96,34 @@ fun CampoFormulario(valor: String, etiqueta: String, onCambio: (String) -> Unit,
 
 @Composable
 fun <T> SelectorOpciones(etiqueta: String, seleccion: String, opciones: List<T>, texto: (T) -> String,
-                        onSeleccionar: (T) -> Unit, modifier: Modifier = Modifier, error: String? = null) {
+                        onSeleccionar: (T) -> Unit, modifier: Modifier = Modifier, error: String? = null, habilitado: Boolean = true,
+                        onPulsacionProlongada: (() -> Unit)? = null) {
     var expandido by remember { mutableStateOf(false) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(7.dp)) {
         if (etiqueta.isNotEmpty()) Text(etiqueta, style = MaterialTheme.typography.titleMedium)
         Box {
-            OutlinedButton(onClick = { expandido = true }, shape = RoundedCornerShape(14.dp),
+            if (onPulsacionProlongada != null) {
+                val configuracion = LocalViewConfiguration.current
+                val pulsacion = remember(configuracion) {
+                    object : ViewConfiguration by configuracion {
+                        override val longPressTimeoutMillis: Long = 3_000L
+                    }
+                }
+                CompositionLocalProvider(LocalViewConfiguration provides pulsacion) {
+                    Surface(shape = RoundedCornerShape(14.dp), color = Color.Transparent,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        modifier = Modifier.fillMaxWidth()) {
+                        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                            .combinedClickable(enabled = habilitado, role = Role.Button,
+                                onClick = { expandido = true }, onLongClick = onPulsacionProlongada)
+                            .padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(seleccion, modifier = Modifier.weight(1f), color = Grafito, textAlign = TextAlign.Start,
+                                style = MaterialTheme.typography.bodyLarge)
+                            Icon(Icons.Outlined.ExpandMore, null, tint = GrisTexto)
+                        }
+                    }
+                }
+            } else OutlinedButton(onClick = { expandido = true }, enabled = habilitado, shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)) {
                 Text(seleccion, modifier = Modifier.weight(1f), color = Grafito, textAlign = TextAlign.Start,
