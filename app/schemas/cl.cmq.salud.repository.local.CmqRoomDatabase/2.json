@@ -1,0 +1,203 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "dc5accf08de511a1ae093d4373c0d324",
+    "entities": [
+      {
+        "tableName": "documentos",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `titular_id` INTEGER NOT NULL, `titular` TEXT NOT NULL, `centro` TEXT NOT NULL, `titulo` TEXT NOT NULL, `tipo` TEXT NOT NULL, `observacion` TEXT NOT NULL, `fecha_carga` TEXT NOT NULL, `estado` TEXT NOT NULL, `adjunto_nombre` TEXT NOT NULL, `adjunto_formato` TEXT NOT NULL, `adjunto_tamano` TEXT NOT NULL, `adjunto_ruta` TEXT, `adjunto_mime` TEXT NOT NULL, `revisor` TEXT, `revision_observacion` TEXT, `revision_fecha` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "titularId",
+            "columnName": "titular_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "titular",
+            "columnName": "titular",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "centro",
+            "columnName": "centro",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "titulo",
+            "columnName": "titulo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tipo",
+            "columnName": "tipo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "observacion",
+            "columnName": "observacion",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fechaCarga",
+            "columnName": "fecha_carga",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "estado",
+            "columnName": "estado",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "adjuntoNombre",
+            "columnName": "adjunto_nombre",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "adjuntoFormato",
+            "columnName": "adjunto_formato",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "adjuntoTamano",
+            "columnName": "adjunto_tamano",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "adjuntoRuta",
+            "columnName": "adjunto_ruta",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "adjuntoMime",
+            "columnName": "adjunto_mime",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revisor",
+            "columnName": "revisor",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "revisionObservacion",
+            "columnName": "revision_observacion",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "revisionFecha",
+            "columnName": "revision_fecha",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "eventos",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`documento_id` INTEGER NOT NULL, `posicion` INTEGER NOT NULL, `titulo` TEXT NOT NULL, `actor` TEXT NOT NULL, `fecha` TEXT NOT NULL, PRIMARY KEY(`documento_id`, `posicion`), FOREIGN KEY(`documento_id`) REFERENCES `documentos`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "documentoId",
+            "columnName": "documento_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "posicion",
+            "columnName": "posicion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "titulo",
+            "columnName": "titulo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "actor",
+            "columnName": "actor",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fecha",
+            "columnName": "fecha",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "documento_id",
+            "posicion"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "documentos",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "documento_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "configuracion",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`clave` TEXT NOT NULL, `valor` TEXT NOT NULL, PRIMARY KEY(`clave`))",
+        "fields": [
+          {
+            "fieldPath": "clave",
+            "columnName": "clave",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "valor",
+            "columnName": "valor",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "clave"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'dc5accf08de511a1ae093d4373c0d324')"
+    ]
+  }
+}
