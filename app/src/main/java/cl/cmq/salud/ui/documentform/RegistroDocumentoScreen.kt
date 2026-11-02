@@ -38,8 +38,8 @@ fun RegistroDocumentoScreen(state: FormularioUiState, onTitulo: (String) -> Unit
         verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Encabezado(onVolver = volver)
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Nuevo documento", style = MaterialTheme.typography.headlineMedium)
-            Text("Completa los datos y adjunta tu archivo", color = GrisTexto)
+            Text(if (state.editando) "Editar documento" else "Nuevo documento", style = MaterialTheme.typography.headlineMedium)
+            Text(if (state.editando) "Modifica los datos. El archivo adjunto se conserva." else "Completa los datos y adjunta tu archivo", color = GrisTexto)
         }
         CampoFormulario(state.titulo, "Título del documento *", onTitulo, error = state.errores["titulo"])
         SelectorOpciones("Tipo de documento *", state.tipo?.etiqueta ?: "Selecciona un tipo", TipoDocumento.entries,
@@ -47,7 +47,7 @@ fun RegistroDocumentoScreen(state: FormularioUiState, onTitulo: (String) -> Unit
         CampoFormulario(state.observacion, "Observación", onObservacion, multilinea = true,
             ayuda = "Opcional · Máximo 500 caracteres", error = state.errores["observacion"])
         Text("Adjunto *", style = MaterialTheme.typography.titleMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (!state.editando) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(onClick = onAdjuntar, modifier = Modifier.weight(1f).heightIn(min = 56.dp), shape = MaterialTheme.shapes.small) {
                 Icon(Icons.Outlined.AttachFile, null, Modifier.size(20.dp)); Spacer(Modifier.width(5.dp)); Text("Elegir archivo")
             }
@@ -63,7 +63,7 @@ fun RegistroDocumentoScreen(state: FormularioUiState, onTitulo: (String) -> Unit
                     Text(state.adjunto.nombre, style = MaterialTheme.typography.titleMedium)
                     Text("${state.adjunto.formato} · ${state.adjunto.tamano}", color = GrisTexto)
                 }
-                TextButton(onClick = onAdjuntar) { Text("Cambiar") }
+                if (!state.editando) TextButton(onClick = onAdjuntar) { Text("Cambiar") }
             }
             if (state.adjunto.rutaLocal != null) {
                 if (state.adjunto.mimeType.startsWith("image/")) {
@@ -73,10 +73,12 @@ fun RegistroDocumentoScreen(state: FormularioUiState, onTitulo: (String) -> Unit
             }
         }
         state.errores["adjunto"]?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        Text("PDF, JPG o PNG · Hasta 10 MiB", color = GrisTexto, style = MaterialTheme.typography.bodySmall)
-        Text("Escanea una página con la cámara y confirma que el texto se lea antes de guardarla. Se almacena como imagen, sin reconocimiento de texto ni recorte automático.", color = GrisTexto, style = MaterialTheme.typography.bodySmall)
-        TextButton(onClick = onAdjuntarDemo) { Text("Generar PDF de ejemplo al guardar") }
-        BotonPrincipal("Guardar documento", onGuardar)
+        if (!state.editando) {
+            Text("PDF, JPG o PNG · Hasta 10 MiB", color = GrisTexto, style = MaterialTheme.typography.bodySmall)
+            Text("Escanea una página con la cámara y confirma que el texto se lea antes de guardarla. Se almacena como imagen, sin reconocimiento de texto ni recorte automático.", color = GrisTexto, style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = onAdjuntarDemo) { Text("Generar PDF de ejemplo al guardar") }
+        }
+        BotonPrincipal(if (state.editando) "Guardar cambios" else "Guardar documento", onGuardar)
         PieDemostracion()
     }
 }

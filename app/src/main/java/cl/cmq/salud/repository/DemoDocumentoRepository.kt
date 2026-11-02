@@ -71,6 +71,32 @@ open class DemoDocumentoRepository(iniciales: List<Documento>? = null) : Documen
         publicar(datos.value.map { if (it.id == id) revisado else it })
     }
 
+    @Synchronized
+    override fun actualizar(usuario: Usuario, id: Long, titulo: String, tipo: TipoDocumento, observacion: String) {
+        require(usuario.rol == Rol.FUNCIONARIO) { "Solo el funcionario titular puede editar documentos." }
+        val documento = requireNotNull(buscar(usuario, id)) { "No tienes acceso a este documento." }
+        require(documento.titularId == usuario.id && documento.estado == EstadoDocumento.PENDIENTE) {
+            "Solo puedes editar tus documentos pendientes de revisión."
+        }
+        require(titulo.trim().length in 3..80) { "El título debe tener entre 3 y 80 caracteres." }
+        require(observacion.length <= 500) { "La observación admite hasta 500 caracteres." }
+        if (documento.titulo == titulo.trim() && documento.tipo == tipo && documento.observacion == observacion.trim()) return
+        val actualizado = documento.copy(titulo = titulo.trim(), tipo = tipo, observacion = observacion.trim(),
+            historial = documento.historial + EventoDocumento("Datos del documento modificados", usuario.nombre, ahora()))
+        publicar(datos.value.map { if (it.id == id) actualizado else it })
+    }
+
+    /** Solo el titular puede borrar documentos pendientes de revisión en este prototipo. */
+    @Synchronized
+    override fun eliminar(usuario: Usuario, id: Long) {
+        require(usuario.rol == Rol.FUNCIONARIO) { "Solo el funcionario titular puede eliminar documentos." }
+        val documento = requireNotNull(buscar(usuario, id)) { "No tienes acceso a este documento." }
+        require(documento.titularId == usuario.id && documento.estado == EstadoDocumento.PENDIENTE) {
+            "Solo puedes eliminar tus documentos pendientes de revisión."
+        }
+        publicar(datos.value.filterNot { it.id == id })
+    }
+
     private fun ahora(): String = LocalDateTime.now().format(DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", Locale.forLanguageTag("es-CL")))
 
     private fun datosIniciales(): List<Documento> {
