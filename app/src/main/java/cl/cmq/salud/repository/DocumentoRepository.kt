@@ -12,5 +12,7 @@ interface DocumentoRepository {
     fun cargar() {}
     fun reiniciar()
     fun registrar(usuario: Usuario, titulo: String, tipo: TipoDocumento, observacion: String, adjunto: Adjunto): Long
+    fun actualizar(usuario: Usuario, id: Long, titulo: String, tipo: TipoDocumento, observacion: String)
+    fun eliminar(usuario: Usuario, id: Long)
     fun revisar(usuario: Usuario, id: Long, decision: EstadoDocumento, observacion: String)
 }
