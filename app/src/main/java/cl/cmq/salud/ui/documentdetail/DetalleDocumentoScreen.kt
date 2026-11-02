@@ -9,7 +9,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -21,7 +22,16 @@ import cl.cmq.salud.ui.theme.*
 @Composable
 fun DetalleDocumentoScreen(documento: Documento?, usuario: Usuario, observacionRevision: String,
     errorRevision: String?, onObservacion: (String) -> Unit, onAprobar: () -> Unit, onRechazar: () -> Unit,
-    onAbrirAdjunto: () -> Unit, onVolver: () -> Unit, onSalir: () -> Unit) {
+    onAbrirAdjunto: () -> Unit, onVolver: () -> Unit, onSalir: () -> Unit, onEliminar: () -> Unit = {}, onEditar: () -> Unit = {}) {
+    var confirmarEliminacion by rememberSaveable(documento?.id) { mutableStateOf(false) }
+    val puedeEliminar = documento != null && usuario.rol == Rol.FUNCIONARIO &&
+        documento.titularId == usuario.id && documento.estado == EstadoDocumento.PENDIENTE
+    if (confirmarEliminacion && puedeEliminar) AlertDialog(
+        onDismissRequest = { confirmarEliminacion = false },
+        title = { Text("¿Eliminar documento?") },
+        text = { Text("Se eliminará «${documento?.titulo}», su adjunto y su historial de este dispositivo. Esta acción no se puede deshacer.") },
+        confirmButton = { TextButton(onClick = { confirmarEliminacion = false; onEliminar() }) { Text("Eliminar") } },
+        dismissButton = { TextButton(onClick = { confirmarEliminacion = false }) { Text("Cancelar") } })
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Encabezado(onVolver = onVolver, onSalir = onSalir)
@@ -60,6 +70,12 @@ fun DetalleDocumentoScreen(documento: Documento?, usuario: Usuario, observacionR
                         }
                     }
                 }
+            }
+            if (puedeEliminar) BotonPrincipal("Editar documento", onEditar)
+            if (puedeEliminar) OutlinedButton(onClick = { confirmarEliminacion = true },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                Text("Eliminar documento")
             }
             AnimatedVisibility(visible = documento.revision != null) {
                 documento.revision?.let { revision ->

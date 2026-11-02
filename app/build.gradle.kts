@@ -1,4 +1,5 @@
 plugins {
+    alias(libs.plugins.ksp)
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
@@ -29,6 +30,8 @@ kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarg
 apply(from = rootProject.file("gradle/windows-test-paths.gradle"))
 
 dependencies {
+    implementation(libs.room.runtime)
+    ksp(libs.room.compiler)
     implementation(libs.androidx.core)
     implementation(libs.androidx.exif)
     implementation(libs.androidx.biometric)
@@ -55,3 +58,5 @@ tasks.withType<Test>().configureEach {
     jvmArgs("--add-opens=java.base/java.lang=ALL-UNNAMED", "--add-opens=java.base/java.util=ALL-UNNAMED")
     systemProperty("cmq.test.pdfReportDir", layout.buildDirectory.dir("reports/documentos-ejemplo").get().asFile.absolutePath)
 }
+
+ksp { arg("room.schemaLocation", "$projectDir/schemas") }

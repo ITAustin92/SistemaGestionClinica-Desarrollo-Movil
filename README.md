@@ -1,6 +1,6 @@
 # CMQ Salud — Gestión documental
 
-Aplicación Android para registrar, consultar y revisar documentos laborales y administrativos de funcionarios de CMQ Salud. Desarrollada con **Kotlin, Jetpack Compose, arquitectura MVVM y SQLite** como proyecto académico de DSY1105.
+Aplicación Android para registrar, consultar y revisar documentos laborales y administrativos de funcionarios de CMQ Salud. Desarrollada con **Kotlin, Jetpack Compose, arquitectura MVVM y Room sobre SQLite** como proyecto académico de DSY1105.
 
 | Información académica | Detalle |
 | --- | --- |
@@ -26,6 +26,8 @@ Los usuarios y los documentos iniciales son ficticios. El acceso permite selecci
 - Visualización de PDF dentro de la aplicación, con navegación por páginas y apertura externa opcional.
 - Validación del formulario y mensajes de error o confirmación.
 - Consulta del detalle, estado e historial de un documento.
+- Edición de título, tipo y observación de los documentos propios pendientes, conservando el adjunto y registrando el cambio en el historial.
+- Eliminación individual con confirmación de los documentos propios pendientes, incluyendo su adjunto e historial.
 - Aprobación o rechazo por el revisor; el rechazo requiere una observación.
 - Bandejas **Pendientes**, **Aprobados** y **Rechazados** para consultar las decisiones propias y abrir el detalle con sus observaciones.
 - Acceso del revisor protegido con el diálogo biométrico de Android.
@@ -46,9 +48,9 @@ Interfaz Compose (ui)
 CmqViewModel (viewmodel)
        ↓ operaciones en Dispatchers.IO
 DocumentoRepository
-       └── SQLiteDocumentoRepository
+       └── RoomDocumentoRepository
               ├── Reglas de registro y revisión
-              ├── DocumentoDatabase → SQLite
+              ├── DocumentoDatabase → DocumentoDao → Room → SQLite
               └── ArchivoAdjuntoStore → archivos privados
        ↓ StateFlow
 Nuevo estado → interfaz actualizada
@@ -63,7 +65,7 @@ Nuevo estado → interfaz actualizada
 
 `MainActivity`, basada en `FragmentActivity`, inicia Compose y conecta AndroidX Biometric con el ViewModel. `CmqApplication` proporciona las instancias compartidas del repositorio y del almacén de adjuntos. `CmqApp` contiene el `NavHost`, los contratos de Activity Result y los callbacks de navegación. El ViewModel no conoce el `NavController`.
 
-El repositorio SQLite reutiliza las reglas de `DemoDocumentoRepository`, cuya implementación en memoria también permite probarlas por separado. Cada operación guarda primero los cambios en una transacción y publica después el nuevo estado. La implementación actual reescribe el conjunto de documentos dentro de la transacción, una solución acotada para el volumen del prototipo.
+El repositorio SQLite reutiliza las reglas de `DemoDocumentoRepository`, cuya implementación en memoria también permite probarlas por separado. Cada operación guarda primero los cambios en una transacción Room y publica después el nuevo estado. El DAO inserta, actualiza o elimina los documentos modificados y conserva su historial en la misma transacción. Las operaciones se ejecutan en `Dispatchers.IO`; el repositorio expone el resultado mediante `StateFlow`.
 
 ### Estructura del código
 
@@ -86,23 +88,27 @@ app/src/main/java/cl/cmq/salud/
 └── repository/
     ├── DocumentoRepository.kt
     ├── DemoDocumentoRepository.kt
-    ├── SQLiteDocumentoRepository.kt
+    ├── RoomDocumentoRepository.kt
     ├── ArchivoAdjuntoStore.kt
     └── local/
-        ├── DocumentoDatabase.kt
+        ├── DocumentoDatabase.kt  # CmqRoomDatabase y migración
+        ├── DocumentoEntity.kt    # Entidades y relación con eventos
+        ├── DocumentoDao.kt
         ├── DocumentoEjemploPdf.kt
         └── HelveticaMetricas.kt
 ```
 
 ## Persistencia y archivos
 
-SQLite se utiliza directamente mediante `SQLiteOpenHelper`, sin Room ni un servidor externo. La base privada `cmq_documentos.db` contiene:
+Room 2.8.4 gestiona SQLite mediante `@Entity`, `@Dao` y `@Database`, sin un servidor externo. La base privada `cmq_documentos.db` contiene:
 
 | Tabla | Contenido |
 | --- | --- |
 | `documentos` | Metadatos, titular, centro, estado, datos del adjunto y última revisión. |
 | `eventos` | Historial ordenado; clave foránea al documento con borrado en cascada. |
 | `configuracion` | Indicador de inicialización para insertar los ejemplos solo una vez. |
+
+La versión 2 migra automáticamente la base SQLite anterior (versión 1), conservando documentos, revisiones, historial y rutas de adjuntos. No se utiliza migración destructiva. El esquema de Room se conserva en `app/schemas/`.
 
 Las imágenes y los PDF se guardan en `files/adjuntos/`, dentro del almacenamiento privado. SQLite guarda su ruta y metadatos, no el contenido binario. Las capturas e importaciones todavía no guardadas utilizan `cache/adjuntos_pendientes/`; los borradores no son persistentes y pueden perderse al terminar el proceso.
 
@@ -145,6 +151,18 @@ Android Studio genera `local.properties` con la ruta del SDK de cada equipo. Ese
 10. Volver a cerrar y abrir la app; comprobar el estado y el historial con el perfil del funcionario.
 
 También puede probarse **Elegir archivo** con un PDF, JPG o PNG. La captura actual digitaliza una página como imagen: no incluye OCR, recorte automático ni generación de PDF multipágina.
+
+### Editar un documento
+
+Con un perfil de funcionario, abrir un documento pendiente y pulsar **Editar documento**. El formulario precarga título, tipo y observación. **Guardar cambios** valida y actualiza el mismo registro en Room; el detalle, los filtros y el historial reflejan la modificación. El título admite de 3 a 80 caracteres y la observación hasta 500. Al regresar con cambios se solicita confirmar si se descartan.
+
+El archivo adjunto se conserva exactamente: no se reemplaza ni se regenera su contenido, incluso si es un PDF de ejemplo. Las herramientas para adjuntar o capturar no aparecen durante la edición. Como decisión del prototipo pendiente de validación docente, solo el funcionario titular puede editar documentos pendientes; los revisados permanecen sin edición.
+
+### Eliminar un documento
+
+Con un perfil de funcionario, abrir el detalle de un documento pendiente y pulsar **Eliminar documento**. Cancelar conserva el registro; confirmar elimina el documento y su historial en una transacción y después retira el adjunto privado. Al volver a abrir la app el documento no reaparece.
+
+Como decisión del prototipo pendiente de validación docente, solo el titular puede eliminar sus documentos pendientes. Los revisores no eliminan documentos y los ya aprobados o rechazados conservan su historial. Esta restricción se verifica también en el repositorio. Los archivos originales importados no se eliminan.
 
 ### Reiniciar la demostración
 
@@ -209,15 +227,15 @@ bash ./gradlew :app:lintDebug
 
 APK de depuración: `app/build/outputs/apk/debug/app-debug.apk`.
 
-Las pruebas incluyen reglas de acceso y revisión, reapertura de SQLite, recuperación de adjuntos e historial, reinicio de la demostración, fallo de escritura, captura JPEG y validación de archivos. Se añaden pruebas del acceso biométrico: rechazo del acceso directo al revisor, intentos fallidos, cancelaciones, resultados tardíos, cambio de perfil, cierre de sesión y sensor simulado en Android 8 con o sin huellas registradas. Las pruebas de integración local utilizan Robolectric; la toma real de fotografías y el recorrido visual deben verificarse en un teléfono o emulador.
+Las pruebas incluyen edición de metadatos sin alterar el adjunto, validaciones, descarte de cambios, fallos de actualización, migración de SQLite v1 a Room v2 en Android 8 y 14 simulados, confirmación/cancelación del borrado, restricciones de eliminación, fallos de transacción, reglas de acceso y revisión, reapertura de SQLite, recuperación de adjuntos e historial, reinicio de la demostración, fallo de escritura, captura JPEG y validación de archivos. Se añaden pruebas del acceso biométrico: rechazo del acceso directo al revisor, intentos fallidos, cancelaciones, resultados tardíos, cambio de perfil, cierre de sesión y sensor simulado en Android 8 con o sin huellas registradas. Las pruebas de integración local utilizan Robolectric; la toma real de fotografías y el recorrido visual deben verificarse en un teléfono o emulador.
 
-Verificación de la versión 0.3.0 realizada el 23 de octubre de 2026 en Windows con JBR 25:
+Verificación de la integración de Room y CRUD realizada el 2 de noviembre de 2026 en Windows con JBR 25:
 
 | Comprobación | Resultado |
 | --- | --- |
 | `assembleDebug` | Correcto; APK generado. |
-| `testDebugUnitTest` | 40 pruebas, sin fallos ni errores. |
-| `lintDebug` | Sin errores; 16 advertencias. |
+| `testDebugUnitTest` | 57 pruebas, sin fallos ni errores. |
+| `lintDebug` | Sin errores; 17 advertencias. |
 | Captura real y recorrido visual | Pendientes de prueba en un dispositivo. |
 
 ## Limitaciones y siguientes etapas
@@ -250,7 +268,8 @@ Verificación de la versión 0.3.0 realizada el 23 de octubre de 2026 en Windows
 | AndroidX ExifInterface | 1.4.2 |
 | AndroidX Biometric | 1.1.0 |
 | AndroidX Fragment | 1.8.9 |
-| Base local | SQLite mediante SQLiteOpenHelper |
+| Base local | Room 2.8.4 sobre SQLite, esquema v2 |
+| Generación de código Room | KSP 2.3.10 |
 | Pruebas | JUnit 4.13.2 y Robolectric 4.17 |
 | SDK de compilación / destino / mínimo | 37.0 / 36 / 26 |
 
