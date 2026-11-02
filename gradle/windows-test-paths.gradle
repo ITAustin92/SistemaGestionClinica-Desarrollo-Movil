@@ -1,0 +1,25 @@
+// Gradle en Windows no carga correctamente algunas clases de prueba si su ruta
+// contiene tildes. Solo se copian los artefactos temporales del test a la caché;
+// el código y el APK permanecen en sus ubicaciones habituales del proyecto.
+if (System.getProperty('os.name').startsWith('Windows') && rootDir.absolutePath.any { ((int) it) > 127 }) {
+    tasks.withType(Test).configureEach {
+        doFirst {
+            def stage = new File(gradle.gradleUserHomeDir, "cmq-test-runtime/${name}-${System.nanoTime()}")
+            stage.mkdirs()
+            def translated = [:]
+            classpath.files.findAll { it.exists() }.eachWithIndex { source, i ->
+                if (source.absolutePath.any { ((int) it) > 127 }) {
+                    def target = new File(stage, "${i}-${source.name}")
+                    if (source.directory) {
+                        copy { from source; into target }
+                    } else {
+                        copy { from source; into stage; rename { "${i}-${source.name}" } }
+                    }
+                    translated[source] = target
+                } else { translated[source] = source }
+            }
+            classpath = files(translated.values())
+            testClassesDirs = files(testClassesDirs.files.collect { translated[it] ?: it })
+        }
+    }
+}

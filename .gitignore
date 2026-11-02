@@ -1,0 +1,19 @@
+.gradle/
+.gradle-user-home/
+.kotlin/
+.idea/
+**/build/
+local.properties
+*.iml
+*.hprof
+captures/
+.DS_Store
+.documentacion/render/
+.documentacion/assets/
+.build-logs/
+.tools/
+# Documentación local
+Documentacion/
+.documentacion/
+Documentacion_MVP_CMQ_v2.zip
+VERIFICACION_BASE.md
